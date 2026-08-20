@@ -22,25 +22,46 @@ function topics(specs) {
   }));
 }
 
-test('never schedules two topics on the same day', () => {
+test('exact timing wins over tidy days — topics may share a day', () => {
+  const list = topics([
+    ['Photosynthesis', 'hard'],
+    ['Respiration', 'hard'],
+    ['Enzymes', 'medium'],
+    ['Genetics', 'medium'],
+    ['Osmosis', 'easy'],
+    ['Mitosis', 'hard'],
+  ]);
+  const plan = planSchedule({ topics: list, startDate: START });
+
+  // Every topic starts the day it was added and hits every rung exactly.
+  for (const topic of list) {
+    const dayNumbers = sessionsForTopic(plan, topic.id).map((s) => s.dayIndex + 1);
+    assert.deepEqual(
+      dayNumbers,
+      ladderFor(topic.difficulty).map((r) => r.day),
+      `${topic.topic} did not land on its ladder`,
+    );
+    assert.ok(
+      sessionsForTopic(plan, topic.id).every((s) => s.drift === 0),
+      `${topic.topic} was nudged off its rung`,
+    );
+  }
+
+  // All six share D1, and the day grid reports the stack rather than hiding it.
+  const firstDay = plan.days[0];
+  assert.equal(firstDay.sessions.length, 6, 'every topic is due on day one');
+  assert.equal(plan.busiestDay, 6);
+});
+
+test('a topic never appears twice on the same day', () => {
   const plan = planSchedule({
-    topics: topics([
-      ['Photosynthesis', 'hard'],
-      ['Respiration', 'hard'],
-      ['Enzymes', 'medium'],
-      ['Genetics', 'medium'],
-      ['Osmosis', 'easy'],
-      ['Mitosis', 'hard'],
-    ]),
+    topics: topics([['A', 'hard'], ['B', 'hard'], ['C', 'medium']]),
     startDate: START,
   });
 
-  const days = plan.sessions.map((s) => s.dayIndex);
-  assert.equal(new Set(days).size, days.length, 'each day index must be unique');
-
   for (const day of plan.days) {
-    const matching = plan.sessions.filter((s) => s.dayIndex === day.dayIndex);
-    assert.ok(matching.length <= 1, `day ${day.iso} holds more than one session`);
+    const ids = day.sessions.map((s) => s.topicId);
+    assert.equal(new Set(ids).size, ids.length, `${day.iso} repeats a topic within the day`);
   }
 });
 
@@ -142,14 +163,27 @@ test('respects the available-weekdays filter', () => {
   }
 });
 
-test('grows the plan rather than doubling up when topics do not fit', () => {
+test('with every weekday available the ladder never drifts at all', () => {
+  const plan = planSchedule({
+    topics: topics([['A', 'hard'], ['B', 'medium'], ['C', 'easy'], ['D', 'hard']]),
+    startDate: START,
+  });
+  for (const session of plan.sessions) {
+    assert.equal(session.drift, 0, `${session.topic} D${session.ladderDay} drifted`);
+  }
+});
+
+test('plan length is set by the ladder, not by how many topics there are', () => {
   const many = topics(Array.from({ length: 14 }, (_, i) => [`Topic ${i}`, 'hard']));
   const plan = planSchedule({ topics: many, startDate: START, horizonDays: 28 });
 
-  const days = plan.sessions.map((s) => s.dayIndex);
-  assert.equal(new Set(days).size, days.length, 'still one topic per day');
-  assert.equal(plan.sessions.length, 14 * 8, 'every rung is placed somewhere');
-  assert.ok(plan.horizonDays > 28, 'the horizon extended to fit');
+  assert.equal(plan.sessions.length, 14 * 8, 'every rung is placed');
+  assert.equal(plan.busiestDay, 14, 'all 14 topics start together, and that is reported');
+
+  // 14 topics take exactly as long as one: the D120 rung sets the horizon.
+  const lastDay = Math.max(...plan.sessions.map((s) => s.dayIndex));
+  assert.equal(lastDay + 1, 120, 'the plan ends on D120 regardless of topic count');
+  assert.ok(plan.horizonDays >= 120);
   assert.equal(plan.horizonDays % 7, 0, 'plan length stays a whole number of weeks');
 });
 
@@ -176,9 +210,16 @@ test('days grid aligns with sessions and covers whole weeks', () => {
 
   for (const session of plan.sessions) {
     const day = plan.days[session.dayIndex];
-    assert.equal(day.session.id, session.id, 'day grid points back at the session');
+    assert.ok(
+      day.sessions.some((s) => s.id === session.id),
+      'day grid points back at the session',
+    );
     assert.equal(daysBetween(plan.startDate, session.date), session.dayIndex);
   }
+
+  // Every session appears in exactly one day bucket.
+  const bucketed = plan.days.reduce((n, d) => n + d.sessions.length, 0);
+  assert.equal(bucketed, plan.sessions.length);
 
   const weeks = groupByWeek(plan.days);
   assert.equal(weeks.length, plan.weeks);

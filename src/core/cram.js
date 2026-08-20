@@ -2,9 +2,10 @@
  * Test / Quiz Cram Mode.
  *
  * Compresses spaced repetition into whatever time is left before a test.
- * The one-topic-per-day rule still holds — cramming does not mean stacking
- * four subjects onto a Tuesday. Hard topics are seen earliest and revisited
- * closest to the test.
+ * Hard topics are seen earliest and revisited closest to the test. A day may
+ * carry several topics — with a fixed deadline, covering the material matters
+ * more than a tidy calendar — but a single topic never repeats twice in one
+ * day, because re-reading something an hour later is not spacing.
  *
  * When there is less than a day left the planner falls back to a timeline of
  * study blocks running up to the test time.
@@ -86,45 +87,25 @@ export function planCram({ topics = [], testDate, now = new Date() } = {}) {
   const waves = buildWaves(active);
   const capacity = slots.length;
 
-  // Not enough days for every pass? Drop the lowest-priority passes (the tail
-  // of the wave list) rather than doubling topics onto shared days.
-  const scheduled = waves.slice(0, capacity);
-  const dropped = waves.slice(capacity);
-
-  const occupied = new Set();
+  // Days may now carry several topics, so no pass is ever dropped for lack of
+  // room. Passes are spread across the runway: first passes at the front,
+  // final reviews landing on the last day before the test.
   const lastDayByTopic = new Map();
   const sessions = [];
 
-  scheduled.forEach((want, i) => {
-    // Spread across the whole runway: first pass on day one, final review on
-    // the last available day. Anchoring both ends matters — a cram plan that
-    // finishes three days early wastes the sessions closest to the test, which
-    // are the ones that survive into the exam hall.
-    const span = scheduled.length > 1 ? Math.round((i * (capacity - 1)) / (scheduled.length - 1)) : 0;
+  waves.forEach((want, i) => {
+    const span = waves.length > 1 ? Math.round((i * (capacity - 1)) / (waves.length - 1)) : 0;
     const desired = slots[Math.min(capacity - 1, span)];
+
+    // A topic still never repeats twice in one day — re-reading something an
+    // hour after you read it is not spacing, it is re-reading.
     const previous = lastDayByTopic.get(want.topic.id);
-    const earliest = previous === undefined ? 0 : previous + 1;
+    const day = previous === undefined ? desired : Math.min(lastDayIndex, Math.max(desired, previous + 1));
 
-    let day = null;
-    for (let delta = 0; delta <= capacity; delta += 1) {
-      for (const candidate of delta === 0 ? [desired] : [desired + delta, desired - delta]) {
-        if (candidate < earliest || candidate > lastDayIndex) continue;
-        if (occupied.has(candidate)) continue;
-        day = candidate;
-        break;
-      }
-      if (day !== null) break;
-    }
-    if (day === null) {
-      dropped.push(want);
-      return;
-    }
-
-    occupied.add(day);
     lastDayByTopic.set(want.topic.id, day);
 
     const date = addDays(today, day);
-    const totalForTopic = scheduled.filter((w) => w.topic.id === want.topic.id).length;
+    const totalForTopic = waves.filter((w) => w.topic.id === want.topic.id).length;
     sessions.push({
       id: `${want.topic.id}:cram${want.repIndex}`,
       topicId: want.topic.id,
@@ -146,18 +127,41 @@ export function planCram({ topics = [], testDate, now = new Date() } = {}) {
     });
   });
 
-  sessions.sort((a, b) => a.dayIndex - b.dayIndex);
+  // Drop any pass that could not keep a day's separation from its predecessor
+  // (only possible when the runway is shorter than the number of passes).
+  const deduped = [];
+  const seen = new Set();
+  for (const session of sessions) {
+    const key = `${session.topicId}:${session.dayIndex}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    deduped.push(session);
+  }
+  const dropped = sessions.length - deduped.length;
+  sessions.length = 0;
+  sessions.push(...deduped);
 
-  const byDay = new Map(sessions.map((s) => [s.dayIndex, s]));
+  sessions.sort(
+    (a, b) => a.dayIndex - b.dayIndex || byDifficulty(a, b),
+  );
+
+  const byDay = new Map();
+  for (const session of sessions) {
+    if (!byDay.has(session.dayIndex)) byDay.set(session.dayIndex, []);
+    byDay.get(session.dayIndex).push(session);
+  }
+
   const days = slots.map((i) => {
     const date = addDays(today, i);
+    const daySessions = byDay.get(i) || [];
     return {
       dayIndex: i,
       date,
       iso: toISODate(date),
       week: Math.floor(i / 7),
       weekday: date.getDay(),
-      session: byDay.get(i) || null,
+      sessions: daySessions,
+      load: daySessions.reduce((sum, s) => sum + s.tasks.reduce((n, t) => n + (t.minutes || 0), 0), 0),
       available: true,
       isTestDay: i === daysToTest,
     };
@@ -175,7 +179,8 @@ export function planCram({ topics = [], testDate, now = new Date() } = {}) {
     sessions,
     days,
     weeks: Math.max(1, Math.ceil(slots.length / 7)),
-    droppedPasses: dropped.length,
+    droppedPasses: dropped,
+    busiestDay: days.reduce((max, d) => Math.max(max, d.sessions.length), 0),
     uncovered,
   };
 }

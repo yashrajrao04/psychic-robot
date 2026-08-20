@@ -627,3 +627,39 @@ details > summary:hover { color: var(--accent); }
   .panel { break-inside: avoid; box-shadow: none; }
   body { background: #fff; }
 }
+
+/* ------------------------------------------------- multiple topics a day */
+
+/* Exact intervals mean days can stack. Each topic on a day gets its own
+   bordered entry so the cell never reads as one run-on block. */
+.cell-entry {
+  border-left: 3px solid var(--muted);
+  padding-left: 0.4rem;
+  margin-bottom: 0.35rem;
+  min-width: 0;
+}
+.cell-entry:last-of-type { margin-bottom: 0.2rem; }
+.cell-entry.diff-hard { border-left-color: var(--hard); }
+.cell-entry.diff-medium { border-left-color: var(--medium); }
+.cell-entry.diff-easy { border-left-color: var(--easy); }
+
+.calendar-cell.is-busy, .cram-day.is-busy { background: color-mix(in srgb, var(--accent) 4%, var(--surface)); }
+
+.load-badge {
+  background: var(--accent);
+  color: #fff;
+  font-size: 0.62rem;
+  font-weight: 700;
+  padding: 0.05rem 0.3rem;
+  border-radius: 4px;
+  margin-left: 0.3rem;
+}
+
+.cram-date { display: flex; align-items: center; justify-content: space-between; gap: 0.3rem; }
+
+/* A stacked cell grows past the fixed minimum rather than clipping. */
+.calendar-cell { height: auto; }
+.today-block { display: flex; flex-direction: column; gap: 0.75rem; }
+
+.start-date { display: flex; align-items: center; gap: 0.25rem; flex: 0 0 auto; }
+.input-sm { width: auto; padding: 0.2rem 0.35rem; font-size: 0.78rem; }

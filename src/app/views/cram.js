@@ -15,22 +15,50 @@ function timeToTest(testDate, now = new Date()) {
 }
 
 function cramDay(day) {
-  const session = day.session;
-  const percent = session ? store.sessionProgress(session) : 0;
+  const sessions = day.sessions;
+  const tasks = sessions.reduce((n, s) => n + s.tasks.length, 0);
+  const done = sessions.reduce(
+    (n, s) => n + s.tasks.filter((t) => store.isTaskDone(s.id, t.id)).length,
+    0,
+  );
+  const percent = tasks ? Math.round((done / tasks) * 100) : 0;
+  const lead = sessions[0];
 
-  return el('div', { class: `cram-day${day.isTestDay ? ' is-test-day' : ''}${session ? ` diff-${session.difficulty}` : ' is-empty'}` }, [
-    el('p', { class: 'cram-date', text: formatShort(day.date) }),
-    session
-      ? el('div', {}, [
-          el('p', { class: 'cell-subject', text: session.subject }),
-          el('p', { class: 'cell-topic', text: session.topic }),
-          el('p', { class: 'cell-pass', text: session.repLabel }),
-          progressBar(percent),
-          details(`cram:${session.id}`, `${session.tasks.length} tasks`, checklist(session), day.dayIndex === 0),
-        ])
-      : el('p', { class: 'cell-rest', text: 'Buffer' }),
-    day.isTestDay ? el('p', { class: 'test-flag', text: 'TEST DAY' }) : null,
-  ]);
+  return el(
+    'div',
+    {
+      class:
+        `cram-day${day.isTestDay ? ' is-test-day' : ''}` +
+        `${lead ? ` diff-${lead.difficulty}` : ' is-empty'}${sessions.length > 1 ? ' is-busy' : ''}`,
+    },
+    [
+      el('p', { class: 'cram-date' }, [
+        formatShort(day.date),
+        sessions.length > 1
+          ? el('span', { class: 'load-badge', title: `${day.load} min of work`, text: `${sessions.length}×` })
+          : null,
+      ]),
+      sessions.length
+        ? el('div', {}, [
+            ...sessions.map((session) =>
+              el('div', { class: `cell-entry diff-${session.difficulty}` }, [
+                el('p', { class: 'cell-subject', text: session.subject }),
+                el('p', { class: 'cell-topic', text: session.topic }),
+                el('p', { class: 'cell-pass', text: session.repLabel }),
+                details(
+                  `cram:${session.id}`,
+                  `${session.tasks.length} tasks`,
+                  checklist(session),
+                  day.dayIndex === 0,
+                ),
+              ]),
+            ),
+            progressBar(percent),
+          ])
+        : el('p', { class: 'cell-rest', text: 'Buffer' }),
+      day.isTestDay ? el('p', { class: 'test-flag', text: 'TEST DAY' }) : null,
+    ],
+  );
 }
 
 function blockTimeline(result) {
@@ -93,7 +121,7 @@ export function renderCram() {
         ),
         el('p', {
           class: 'muted small',
-          text: 'Add as many as you like — but the one-topic-per-day rule still holds, so more topics means fewer passes each.',
+          text: 'Add as many as you like. Every topic gets covered — days will stack up if the runway is short, and the plan tells you when they do.',
         }),
       ]),
 
@@ -174,16 +202,16 @@ export function renderCram() {
   }
 
   const warnings = [];
-  if (result.uncovered.length) {
+  if (result.busiestDay > 1) {
     warnings.push(
-      `There is not enough time to cover: ${result.uncovered.map((t) => t.topic).join(', ')}. ` +
-        'With one topic per day, that is a hard limit — drop the lowest-value topics rather than splitting days.',
+      `Your busiest day carries ${result.busiestDay} topics. With a fixed deadline that is the honest trade — ` +
+        'if it is more than you can actually sit down and do, cut topics rather than pretending the day is longer.',
     );
   }
   if (result.droppedPasses > 0) {
     warnings.push(
-      `${result.droppedPasses} repeat pass(es) did not fit. Every topic still gets at least one session, ` +
-        'but the spacing is thinner than ideal.',
+      `${result.droppedPasses} repeat pass(es) did not fit — a topic never repeats twice in one day, and the ` +
+        'runway is too short to space them. Every topic still gets covered.',
     );
   }
 
@@ -193,7 +221,7 @@ export function renderCram() {
       ...warnings.map((text) => el('p', { class: 'notice', text })),
       el('p', {
         class: 'muted small',
-        text: 'Hard topics come first, while you have most time to recover, and the final days are review passes closest to the test.',
+        text: 'Hard topics come first, while you have most time to recover, and the final passes land closest to the test.',
       }),
       el('div', { class: 'cram-grid' }, result.days.map(cramDay)),
       exportBar(result.sessions),

@@ -1,16 +1,16 @@
 # Study Buddy
 
 A spaced-repetition study planner, revision timetable and practice engine. You give it
-subjects and topics; it builds a calendar where **exactly one topic falls on each day**,
-every topic climbs the expanding ladder **D1 · D2 · D4 · D7 · D14 · D30 · D60 · D120**, and
-each day carries a specific checklist rather than a vague "revise chapter 4".
+subjects and topics; every topic climbs the expanding ladder
+**D1 · D2 · D4 · D7 · D14 · D30 · D60 · D120** from the day you start it, and each session
+carries a specific checklist rather than a vague "revise chapter 4".
 
 It runs entirely in the browser. No build step, no dependencies, no server, no accounts —
 your data stays in `localStorage`.
 
 ```bash
 npm run serve   # http://localhost:5173
-npm test        # 62 unit tests, no dependencies
+npm test        # 64 unit tests, no dependencies
 ```
 
 ## What it does
@@ -33,20 +33,32 @@ Each rung asks for different work: D1 builds the representation, D2 catches what
 faded overnight, the middle rungs test it under timed conditions, and D30 onward are cold
 retrieval — if you cannot recall it unaided at D60, the earlier passes did not stick.
 
-Where two topics want the same day, the scheduler moves one to the nearest free day,
-preferring to slip *later*, since studying early wastes the interval. Early rungs are held
-to tight tolerances (a day or two) because that is where the spacing matters; the long
-rungs may drift further, where a few days change nothing. If the topics genuinely do not
-fit, the plan gets longer. It never doubles two topics onto a day.
+**Timing is exact, and nothing is allowed to bend it.** Intervals are the whole mechanism
+of spaced repetition, so no session is ever nudged off its rung to keep the calendar tidy.
+Days therefore stack: if six topics start together, all six are due on D1, again on D2, and
+so on. The plan says so plainly — stacked days are flagged with a count and the total
+minutes, so the load is visible rather than hidden.
 
-**Dates.** Each topic climbs the ladder from **its own** start date — the day you added it.
-A topic added three weeks into a plan starts today, not back-dated to the plan's origin,
-and existing topics keep the schedule you have been following.
+The one exception is your own **study days** setting. Switch a weekday off and sessions
+landing there move to the nearest day you do study. Leave all seven on and drift is exactly
+zero, which the test suite asserts.
+
+**Dates.** Each topic climbs the ladder from **its own** start date — the day you added it,
+or any date you set on it afterwards. A topic added three weeks into a plan starts then, not
+back-dated to the plan's origin, and existing topics keep the schedule you are following.
+Moving a topic's D1 is also how you spread load: stagger the start dates and the stacks come
+apart, without touching the intervals.
+
+Because the ladder is fixed, plan length does not depend on how many topics you have —
+fourteen topics finish on D120 just like one. Only the daily load changes.
 
 **Cram mode.** Give it a test date and time and it compresses the same logic into whatever
 runway is left: hard topics first while you have room to recover, final reviews on the last
-available day. Under a day to go, it switches to a timeline of 40-minute blocks ending
-30 minutes before the test.
+available day. Nothing is dropped for lack of room — days stack and the plan tells you how
+crowded the worst one is, so you can cut topics yourself rather than discovering later that
+the app quietly dropped them. A topic still never repeats twice in one day, because
+re-reading something an hour later is not spacing. Under a day to go, it switches to a
+timeline of 40-minute blocks ending 30 minutes before the test.
 
 **Study Buddy.** Paste your notes and get a side-by-side comparison: column A is what you
 wrote, column B is the same material refiled into the eight sections complete notes have
@@ -109,7 +121,7 @@ test/           node:test suites for every core module
 ```
 
 `src/core` holds no browser APIs, so the scheduling and grading logic is testable directly
-under Node. The invariants that matter most — one topic per day, the D1–D120 ladder, hard
-topics landing on the ladder, no topic scheduled before it was added, and no export leaking
-two events onto one day — are asserted in `test/scheduler.test.js` and
-`test/exporters.test.js`.
+under Node. The invariants that matter most — every topic landing exactly on the D1–D120
+ladder with zero drift, no topic scheduled before it was added, no topic repeating twice in
+a day, and exports that agree on wall-clock time — are asserted in `test/scheduler.test.js`
+and `test/exporters.test.js`.

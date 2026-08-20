@@ -44,7 +44,7 @@ function header(activeTab) {
       el('span', { class: 'logo', text: '◱' }),
       el('div', {}, [
         el('h1', { text: 'Study Buddy' }),
-        el('p', { class: 'tagline', text: 'Spaced repetition, one topic a day.' }),
+        el('p', { class: 'tagline', text: 'Spaced repetition on D1 · D2 · D4 · D7 · D14 · D30 · D60 · D120.' }),
       ]),
     ]),
     el(

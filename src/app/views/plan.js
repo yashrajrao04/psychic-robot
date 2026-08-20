@@ -46,7 +46,7 @@ export function progressBar(percent) {
   ]);
 }
 
-/** One day's card: the single topic, its pass label and its checklist. */
+/** One session card: the topic, its rung on the ladder and its checklist. */
 export function sessionCard(session, { showDate = true, open = false } = {}) {
   const percent = store.sessionProgress(session);
   const total = (session.tasks || []).reduce((sum, t) => sum + (t.minutes || 0), 0);
@@ -166,29 +166,46 @@ function calendarView(plan) {
           { class: 'calendar-row' },
           days.map((day) => {
             const isToday = day.iso === todayISO;
-            const session = day.session;
-            const percent = session ? store.sessionProgress(session) : 0;
+            const sessions = day.sessions;
+            const tasks = sessions.reduce((n, s) => n + s.tasks.length, 0);
+            const done = sessions.reduce(
+              (n, s) => n + s.tasks.filter((t) => store.isTaskDone(s.id, t.id)).length,
+              0,
+            );
+            const percent = tasks ? Math.round((done / tasks) * 100) : 0;
+            const lead = sessions[0];
 
             return el(
               'div',
               {
                 class:
                   `calendar-cell${isToday ? ' is-today' : ''}` +
-                  `${!day.available ? ' is-off' : ''}${session ? ` diff-${session.difficulty}` : ' is-empty'}` +
-                  `${percent === 100 ? ' is-complete' : ''}`,
+                  `${!day.available ? ' is-off' : ''}${lead ? ` diff-${lead.difficulty}` : ' is-empty'}` +
+                  `${tasks && percent === 100 ? ' is-complete' : ''}${sessions.length > 1 ? ' is-busy' : ''}`,
               },
               [
                 el('div', { class: 'cell-date' }, [
                   el('span', { text: String(day.date.getDate()) }),
                   isToday ? el('span', { class: 'today-badge', text: 'Today' }) : null,
+                  sessions.length > 1
+                    ? el('span', { class: 'load-badge', title: `${day.load} min of work`, text: `${sessions.length}×` })
+                    : null,
                 ]),
-                session
+                sessions.length
                   ? el('div', { class: 'cell-body' }, [
-                      el('p', { class: 'cell-subject', text: session.subject }),
-                      el('p', { class: 'cell-topic', text: session.topic }),
-                      el('p', { class: 'cell-pass', text: session.repLabel }),
+                      ...sessions.map((session) =>
+                        el('div', { class: `cell-entry diff-${session.difficulty}` }, [
+                          el('p', { class: 'cell-subject', text: session.subject }),
+                          el('p', { class: 'cell-topic', text: session.topic }),
+                          el('p', { class: 'cell-pass', text: `${session.repLabel} · D${session.ladderDay}` }),
+                          details(
+                            `cell:${session.id}`,
+                            `${session.tasks.length} tasks`,
+                            checklist(session),
+                          ),
+                        ]),
+                      ),
                       progressBar(percent),
-                      details(`cell:${session.id}`, `${session.tasks.length} tasks`, checklist(session)),
                     ])
                   : el('p', { class: 'cell-rest', text: day.available ? 'Rest / buffer' : 'Off' }),
               ],
@@ -356,7 +373,7 @@ export function renderPlan(plan) {
           el('p', {
             class: 'muted',
             text:
-              `${plan.sessions.length} sessions across ${plan.weeks} weeks · one topic per day · ` +
+              `${plan.sessions.length} sessions across ${plan.weeks} weeks · exact D1–D120 timing · ` +
               `${doneTasks}/${totalTasks} tasks done`,
           }),
         ]),
@@ -367,8 +384,16 @@ export function renderPlan(plan) {
           ? el('p', {
               class: 'notice',
               text:
-                `Your topics need ${plan.overflowDays} day(s) beyond the ${state.settings.horizonDays / 7}-week window, ` +
-                'so the plan was extended rather than doubling topics onto shared days.',
+                `The ladder runs ${plan.overflowDays} day(s) past your ${Math.round(state.settings.horizonDays / 7)}-week ` +
+                'window, so the plan was extended to keep the final D120 review.',
+            })
+          : null,
+        plan.busiestDay > 1
+          ? el('p', {
+              class: 'notice',
+              text:
+                `Intervals are exact, so days can stack: your busiest carries ${plan.busiestDay} topics. ` +
+                'To spread the load, add topics on different days rather than all at once — each one starts its ladder the day you add it.',
             })
           : null,
         body,

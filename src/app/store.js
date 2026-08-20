@@ -203,6 +203,17 @@ export function setTopicDifficulty(id, difficulty) {
   });
 }
 
+/**
+ * Move a topic's ladder. Every rung is relative to this date, so this is how a
+ * learner spreads load without waiting days to add topics one at a time.
+ */
+export function setTopicStartDate(id, iso) {
+  update((s) => {
+    const topic = s.topics.find((t) => t.id === id);
+    if (topic && iso) topic.startDate = iso;
+  });
+}
+
 export function renameTopic(id, name) {
   update((s) => {
     const topic = s.topics.find((t) => t.id === id);

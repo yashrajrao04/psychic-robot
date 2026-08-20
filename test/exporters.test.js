@@ -156,7 +156,7 @@ function parseCSV(text) {
   return rows;
 }
 
-test('exported CSV round-trips through a real parser, one event per day', () => {
+test('exported CSV round-trips through a real parser', () => {
   const rows = parseCSV(toNotionCSV(plan.sessions));
   const [header, ...body] = rows;
 
@@ -168,6 +168,8 @@ test('exported CSV round-trips through a real parser, one event per day', () => 
   assert.equal(mathsRow[0], 'Maths – Integration, by parts');
   assert.equal(mathsRow[3], 'Integration, by parts');
 
-  const dates = body.map((r) => r[1]);
-  assert.equal(new Set(dates).size, dates.length, 'one event per day, end to end');
+  // Timing is exact, so several topics can legitimately share a date. What
+  // must stay unique is the event identity: one row per topic-and-rung.
+  const identities = body.map((r) => `${r[1]}|${r[3]}|${r[4]}`);
+  assert.equal(new Set(identities).size, identities.length, 'no duplicated events');
 });

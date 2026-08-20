@@ -80,55 +80,34 @@ export function repLabel(step) {
 }
 
 /**
- * Stagger each topic's start so the dense early rungs of one topic do not
- * collide with another's. The first four rungs sit on offsets 0, 1, 3 and 6,
- * so a stride of 4 interleaves consecutive topics cleanly.
- */
-const SEED_STRIDE = 4;
-
-/**
- * Find the closest usable day to `desiredDay`.
+ * Move a day onto the nearest weekday the learner actually studies.
  *
- * Search order is 0, +1, -1, +2, -2 … so a session lands as near its ideal
- * spacing as possible, preferring to slip *later* rather than earlier on ties
- * (studying a little late beats studying too soon — the interval is the point).
+ * With every day switched on — the default — this never fires and the ladder
+ * is exact. It only shifts a session when the learner has explicitly turned a
+ * weekday off, which is their own trade against precise timing.
  */
-function findFreeDay(desiredDay, { occupied, earliestDay, isDayAllowed, maxDrift }) {
-  const candidates = [0];
-  for (let step = 1; step <= maxDrift; step += 1) candidates.push(step, -step);
-
-  for (const delta of candidates) {
-    const day = desiredDay + delta;
-    if (day < earliestDay) continue;
-    if (occupied.has(day)) continue;
-    if (!isDayAllowed(day)) continue;
-    return day;
+function toStudyDay(dayIndex, isDayAllowed) {
+  if (isDayAllowed(dayIndex)) return dayIndex;
+  for (let delta = 1; delta <= 7; delta += 1) {
+    if (isDayAllowed(dayIndex + delta)) return dayIndex + delta;
+    if (dayIndex - delta >= 0 && isDayAllowed(dayIndex - delta)) return dayIndex - delta;
   }
-
-  // Nothing within the drift window: walk forward until something opens up.
-  // The plan grows rather than doubling a topic up on someone else's day.
-  let day = Math.max(desiredDay + maxDrift + 1, earliestDay);
-  const ceiling = day + 400; // guards against an impossible weekday filter
-  while (day < ceiling) {
-    if (!occupied.has(day) && isDayAllowed(day)) return day;
-    day += 1;
-  }
-  return null;
+  return dayIndex;
 }
 
 /**
  * Build a spaced-repetition plan.
  *
- * Each topic climbs the ladder from *its own* start date, so a topic added
- * today begins today rather than being back-dated to when the plan was first
- * created. Topics sharing a start date are staggered so their dense early
- * rungs interleave instead of fighting over the same days.
+ * Timing is exact: every topic starts on its own start date and hits every
+ * rung of its ladder on the nose. Days may therefore carry more than one
+ * topic — the intervals are what make spaced repetition work, so nothing is
+ * nudged off its rung to keep days tidy.
  *
  * @param {object}   options
  * @param {Array}    options.topics             `{ id, subject, topic, difficulty, startDate? }`, in study order.
  * @param {Date}     [options.startDate]        Origin of the calendar grid.
  * @param {number}   [options.horizonDays]      Target length; the plan may grow past it if needed.
- * @param {number[]} [options.availableWeekdays] 0=Sun … 6=Sat. Days not listed stay empty.
+ * @param {number[]} [options.availableWeekdays] 0=Sun … 6=Sat. The only thing that can shift a rung.
  * @returns {{days: Array, sessions: Array, weeks: number, horizonDays: number, overflowDays: number}}
  */
 export function planSchedule({
@@ -147,117 +126,80 @@ export function planSchedule({
     ? anchored.reduce((earliest, d) => (d < earliest ? d : earliest))
     : startOfDay(startDate);
 
-  const anchors = active.map((t) => (t.startDate ? startOfDay(t.startDate) : start));
-
   const allowed = new Set(availableWeekdays);
   const isDayAllowed = (dayIndex) => allowed.has(addDays(start, dayIndex).getDay());
 
-  // 1. Expand every topic into its desired sessions, seeded from its own start.
-  //    Topics that begin on the same day are staggered against each other.
-  const strideCounter = new Map();
-  const wanted = [];
+  const sessions = [];
 
   active.forEach((topic, topicIndex) => {
     const profile = profileFor(topic.difficulty);
-    const anchorDay = Math.max(0, daysBetween(start, anchors[topicIndex]));
+    const anchorDate = topic.startDate ? startOfDay(topic.startDate) : start;
+    const anchorDay = Math.max(0, daysBetween(start, anchorDate));
 
-    const groupKey = anchorDay;
-    const position = strideCounter.get(groupKey) || 0;
-    strideCounter.set(groupKey, position + 1);
-    const seed = anchorDay + position * SEED_STRIDE;
+    for (const rung of ladderFor(topic.difficulty)) {
+      const dayIndex = toStudyDay(anchorDay + rung.offset, isDayAllowed);
+      const date = addDays(start, dayIndex);
 
-    const ladder = ladderFor(topic.difficulty);
-    ladder.forEach((rung) => {
-      wanted.push({
-        topic,
+      sessions.push({
+        id: `${topic.id}:${rung.step}`,
+        topicId: topic.id,
         topicIndex,
-        profile,
-        rung,
+        subject: topic.subject,
+        topic: topic.topic,
+        difficulty: profile.key,
         repIndex: rung.index,
-        repCount: ladder.length,
-        earliestPossible: anchorDay,
-        desiredDay: seed + rung.offset,
+        repCount: profile.steps.length,
+        ladderStep: rung.step,
+        ladderDay: rung.day,
+        repLabel: repLabel(rung.step),
+        dayIndex,
+        date,
+        iso: toISODate(date),
+        drift: dayIndex - (anchorDay + rung.offset),
+        tasks: buildTasks({
+          subject: topic.subject,
+          topic: topic.topic,
+          difficulty: profile.key,
+          repIndex: rung.index,
+          repCount: profile.steps.length,
+          ladderStep: rung.step,
+        }),
       });
-    });
+    }
   });
 
-  // 2. Earlier sessions get first pick of the calendar. Ties break towards the
-  //    earlier rung, then harder topics, then the user's own ordering.
-  wanted.sort(
+  // Chronological, and within a day: hardest first, then the learner's order.
+  sessions.sort(
     (a, b) =>
-      a.desiredDay - b.desiredDay ||
-      a.repIndex - b.repIndex ||
-      a.profile.weight - b.profile.weight ||
-      a.topicIndex - b.topicIndex,
+      a.dayIndex - b.dayIndex ||
+      profileFor(a.difficulty).weight - profileFor(b.difficulty).weight ||
+      a.topicIndex - b.topicIndex ||
+      a.ladderStep - b.ladderStep,
   );
 
-  // 3. Place them one at a time, never doubling up on a day.
-  const occupied = new Set();
-  const lastDayByTopic = new Map();
-  const sessions = [];
-
-  for (const want of wanted) {
-    const previous = lastDayByTopic.get(want.topic.id);
-    const earliestDay =
-      previous === undefined ? want.earliestPossible : Math.max(previous + MIN_GAP, want.earliestPossible);
-    const desiredDay = Math.max(want.desiredDay, earliestDay);
-
-    const dayIndex = findFreeDay(desiredDay, {
-      occupied,
-      earliestDay,
-      isDayAllowed,
-      maxDrift: want.rung.tolerance,
-    });
-    if (dayIndex === null) continue;
-
-    occupied.add(dayIndex);
-    lastDayByTopic.set(want.topic.id, dayIndex);
-
-    const date = addDays(start, dayIndex);
-    sessions.push({
-      id: `${want.topic.id}:${want.rung.step}`,
-      topicId: want.topic.id,
-      subject: want.topic.subject,
-      topic: want.topic.topic,
-      difficulty: want.profile.key,
-      repIndex: want.repIndex,
-      repCount: want.repCount,
-      ladderStep: want.rung.step,
-      ladderDay: want.rung.day,
-      repLabel: repLabel(want.rung.step),
-      dayIndex,
-      date,
-      iso: toISODate(date),
-      drift: dayIndex - want.desiredDay,
-      tasks: buildTasks({
-        subject: want.topic.subject,
-        topic: want.topic.topic,
-        difficulty: want.profile.key,
-        repIndex: want.repIndex,
-        repCount: want.repCount,
-        ladderStep: want.rung.step,
-      }),
-    });
-  }
-
-  sessions.sort((a, b) => a.dayIndex - b.dayIndex);
-
-  // 4. Lay the sessions onto a continuous run of days for calendar rendering.
-  const lastDay = sessions.length ? sessions[sessions.length - 1].dayIndex : horizonDays - 1;
+  // Lay the sessions onto a continuous run of days for calendar rendering.
+  const lastDay = sessions.length ? Math.max(...sessions.map((s) => s.dayIndex)) : horizonDays - 1;
   const totalDays = Math.max(horizonDays, lastDay + 1);
   const paddedDays = Math.ceil(totalDays / 7) * 7; // always whole weeks
 
-  const byDay = new Map(sessions.map((s) => [s.dayIndex, s]));
+  const byDay = new Map();
+  for (const session of sessions) {
+    if (!byDay.has(session.dayIndex)) byDay.set(session.dayIndex, []);
+    byDay.get(session.dayIndex).push(session);
+  }
+
   const days = [];
   for (let i = 0; i < paddedDays; i += 1) {
     const date = addDays(start, i);
+    const daySessions = byDay.get(i) || [];
     days.push({
       dayIndex: i,
       date,
       iso: toISODate(date),
       week: Math.floor(i / 7),
       weekday: date.getDay(),
-      session: byDay.get(i) || null,
+      sessions: daySessions,
+      load: daySessions.reduce((sum, s) => sum + s.tasks.reduce((n, t) => n + (t.minutes || 0), 0), 0),
       available: isDayAllowed(i),
     });
   }
@@ -268,6 +210,7 @@ export function planSchedule({
     weeks: paddedDays / 7,
     horizonDays: paddedDays,
     overflowDays: Math.max(0, lastDay + 1 - horizonDays),
+    busiestDay: days.reduce((max, d) => Math.max(max, d.sessions.length), 0),
     startDate: start,
   };
 }
@@ -287,10 +230,10 @@ export function sessionsForTopic(plan, topicId) {
   return plan.sessions.filter((s) => s.topicId === topicId);
 }
 
-/** The session scheduled for a given date, or null. */
-export function sessionOn(plan, date) {
+/** Every session scheduled for a given date, in study order. */
+export function sessionsOn(plan, date) {
   const iso = toISODate(date);
-  return plan.sessions.find((s) => s.iso === iso) || null;
+  return plan.sessions.filter((s) => s.iso === iso);
 }
 
 /** Sessions falling in the next `count` days, starting today (inclusive). */

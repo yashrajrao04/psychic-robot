@@ -29,6 +29,19 @@ function topicRow(topic, index, total) {
       el('span', { class: `dot dot-${topic.difficulty}` }),
       el('span', { text: topic.topic }),
     ]),
+    el('label', { class: 'start-date' }, [
+      el('span', { class: 'muted small', text: 'D1' }),
+      el('input', {
+        type: 'date',
+        class: 'input input-sm',
+        // Raw store topics carry startDate as an ISO string; the joined shape
+        // used elsewhere carries a Date under a different key.
+        value: topic.startDate || '',
+        title: `Day 1 for ${topic.topic} — every rung is measured from here`,
+        'aria-label': `Start date for ${topic.topic}`,
+        onChange: (e) => store.setTopicStartDate(topic.id, e.target.value),
+      }),
+    ]),
     difficultyPicker(topic),
     el('div', { class: 'row-actions' }, [
       el('button', {
@@ -177,7 +190,12 @@ function settingsPanel() {
           }),
         ),
       ),
-      el('p', { class: 'muted small', text: 'Days you switch off stay empty. The plan simply grows longer to fit.' }),
+      el('p', {
+        class: 'muted small',
+        text:
+          'Switching a day off is the only thing that can shift a rung: sessions landing there move to the ' +
+          'nearest day you do study. Leave all seven on and the ladder is exact.',
+      }),
     ]),
   ]);
 }
