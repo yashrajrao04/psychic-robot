@@ -253,24 +253,48 @@ function timelineView(plan) {
         el(
           'div',
           { class: 'timeline-track' },
-          sessions.map((s, i) => [
-            i > 0
-              ? el('span', {
-                  class: 'timeline-gap',
-                  style: {
-                    left: `${(sessions[i - 1].dayIndex / span) * 100}%`,
-                    width: `${((s.dayIndex - sessions[i - 1].dayIndex) / span) * 100}%`,
-                  },
-                  title: `${s.dayIndex - sessions[i - 1].dayIndex} day gap`,
-                })
-              : null,
-            el('span', {
-              class: `timeline-dot diff-${s.difficulty}`,
-              style: { left: `${(s.dayIndex / span) * 100}%` },
-              title: `${formatShort(s.date)} — ${s.repLabel}`,
-              text: String(i + 1),
-            }),
-          ]),
+          // Positions are linear in time, but the early rungs (D1 and D2) sit
+          // one day apart out of ~150 — a few pixels — so the later dot would
+          // sit right on top of the earlier one and hide it. Nudge each dot
+          // right by however many pixels it needs to clear its predecessor.
+          // The nudge is in absolute px, so it holds at any track width, and
+          // the exact date stays in the tooltip.
+          (() => {
+            const DOT = 22;
+            const MIN_GAP_PX = 20;
+            const ASSUMED_TRACK = 320; // conservative: the narrowest layout
+            const usable = ASSUMED_TRACK - DOT;
+
+            let lastPx = -Infinity;
+            const nudges = sessions.map((s) => {
+              const idealPx = (s.dayIndex / span) * usable;
+              const placedPx = Math.max(idealPx, lastPx + MIN_GAP_PX);
+              lastPx = placedPx;
+              return Math.round(placedPx - idealPx);
+            });
+
+            const at = (dayIndex, nudge = 0) =>
+              `calc(11px + ${(dayIndex / span).toFixed(4)} * (100% - ${DOT}px) + ${nudge}px)`;
+
+            return sessions.map((s, i) => [
+              i > 0
+                ? el('span', {
+                    class: 'timeline-gap',
+                    style: {
+                      left: at(sessions[i - 1].dayIndex, nudges[i - 1]),
+                      width: `calc(${((s.dayIndex - sessions[i - 1].dayIndex) / span).toFixed(4)} * (100% - ${DOT}px) + ${nudges[i] - nudges[i - 1]}px)`,
+                    },
+                    title: `${s.dayIndex - sessions[i - 1].dayIndex} day gap`,
+                  })
+                : null,
+              el('span', {
+                class: `timeline-dot diff-${s.difficulty}`,
+                style: { left: at(s.dayIndex, nudges[i]) },
+                title: `${formatShort(s.date)} — ${s.repLabel} (D${s.ladderDay})`,
+                text: String(i + 1),
+              }),
+            ]);
+          })(),
         ),
       ]);
     }),

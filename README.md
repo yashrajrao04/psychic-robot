@@ -2,34 +2,46 @@
 
 A spaced-repetition study planner, revision timetable and practice engine. You give it
 subjects and topics; it builds a calendar where **exactly one topic falls on each day**,
-every topic comes back two or three times, and each day carries a specific checklist
-rather than a vague "revise chapter 4".
+every topic climbs the expanding ladder **D1 · D2 · D4 · D7 · D14 · D30 · D60 · D120**, and
+each day carries a specific checklist rather than a vague "revise chapter 4".
 
 It runs entirely in the browser. No build step, no dependencies, no server, no accounts —
 your data stays in `localStorage`.
 
 ```bash
 npm run serve   # http://localhost:5173
-npm test        # 56 unit tests, no dependencies
+npm test        # 62 unit tests, no dependencies
 ```
 
 ## What it does
 
 **Plan.** Four views of the same schedule: a week-by-week revision timetable (subjects and
-topics down the side, Week 1–4 across the top), a day calendar, a chronological list, and a
+topics down the side, weeks across the top), a day calendar, a chronological list, and a
 timeline that makes the spacing itself visible.
 
-**Spacing.** Difficulty drives repetition:
+**Spacing.** Every topic follows the same expanding ladder, each interval roughly doubling
+the last. Difficulty decides how many rungs it uses — everything still reaches D120, because
+long-term retention is the point; easier material just skips the dense early passes.
 
-| Difficulty | Passes | Days |
-| ---------- | ------ | ---- |
-| Hard | 3 | 1, 3–4, ~15 |
-| Medium | 3 | 1, 5, ~16 |
-| Easy | 2 | 1, 8 |
+| Difficulty | Passes | Ladder |
+| ---------- | ------ | ------ |
+| Hard | 8 | D1 · D2 · D4 · D7 · D14 · D30 · D60 · D120 |
+| Medium | 7 | D1 · D4 · D7 · D14 · D30 · D60 · D120 |
+| Easy | 6 | D1 · D7 · D14 · D30 · D60 · D120 |
 
-Where two topics want the same day, the scheduler moves one to the nearest free day —
-preferring to slip *later*, since studying early costs more than studying late. If the
-topics genuinely do not fit, the plan gets longer. It never doubles two topics onto a day.
+Each rung asks for different work: D1 builds the representation, D2 catches what already
+faded overnight, the middle rungs test it under timed conditions, and D30 onward are cold
+retrieval — if you cannot recall it unaided at D60, the earlier passes did not stick.
+
+Where two topics want the same day, the scheduler moves one to the nearest free day,
+preferring to slip *later*, since studying early wastes the interval. Early rungs are held
+to tight tolerances (a day or two) because that is where the spacing matters; the long
+rungs may drift further, where a few days change nothing. If the topics genuinely do not
+fit, the plan gets longer. It never doubles two topics onto a day.
+
+**Dates.** Each topic climbs the ladder from **its own** start date — the day you added it.
+A topic added three weeks into a plan starts today, not back-dated to the plan's origin,
+and existing topics keep the schedule you have been following.
 
 **Cram mode.** Give it a test date and time and it compresses the same logic into whatever
 runway is left: hard topics first while you have room to recover, final reviews on the last
@@ -49,6 +61,11 @@ they stay on-topic. Two strong answers in a row raises the difficulty; two misse
 database CSV), and a flat one-row-per-task CSV for Excel or Sheets. Every export keeps the
 same shape: one topic per event per day, titled `[Subject] – [Topic]`, with the day's
 checklist as the description.
+
+Times are written as RFC 5545 *floating* local times, so a session set for 18:00 stays at
+18:00 in whatever calendar and timezone opens it, and does not shift when you travel. All
+three exporters agree on the wall-clock time, and the test suite runs across several
+timezones to keep them honest.
 
 ## It will not do your homework
 
@@ -92,6 +109,7 @@ test/           node:test suites for every core module
 ```
 
 `src/core` holds no browser APIs, so the scheduling and grading logic is testable directly
-under Node. The invariants that matter most — one topic per day, 2–3 repetitions, hard
-topics on days 1 / 3–4 / ~15, no export leaking two events onto one day — are asserted in
-`test/scheduler.test.js` and `test/exporters.test.js`.
+under Node. The invariants that matter most — one topic per day, the D1–D120 ladder, hard
+topics landing on the ladder, no topic scheduled before it was added, and no export leaking
+two events onto one day — are asserted in `test/scheduler.test.js` and
+`test/exporters.test.js`.

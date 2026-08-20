@@ -36,6 +36,28 @@ test('event descriptions carry the day checklist', () => {
   }
 });
 
+test('ICS times are floating local, so 18:00 stays 18:00 anywhere', () => {
+  const ics = toICS(plan.sessions, { startTime: '18:00' });
+
+  const starts = ics.match(/DTSTART:[^\r\n]*/g);
+  for (const line of starts) {
+    assert.match(line, /^DTSTART:\d{8}T180000$/, `expected floating 18:00, got "${line}"`);
+    assert.ok(!line.endsWith('Z'), 'an absolute UTC instant would shift when imported elsewhere');
+  }
+
+  // DTSTAMP genuinely is a moment in time and stays absolute.
+  assert.match(ics.match(/DTSTAMP:[^\r\n]*/)[0], /Z$/);
+
+  // The Google link must agree with the .ics rather than contradicting it.
+  const gcal = new URL(googleCalendarLink(plan.sessions[0], { startTime: '18:00' }));
+  assert.equal(gcal.searchParams.get('dates').split('/')[0], starts[0].replace('DTSTART:', ''));
+});
+
+test('the CSV start time matches the ICS start time', () => {
+  const csvTime = toCSV(plan.sessions, { startTime: '18:00' }).split('\r\n')[1].split(',')[2];
+  assert.equal(csvTime, '6:00 PM', 'all three exports describe the same wall-clock time');
+});
+
 test('ICS output is well formed and has one event per session', () => {
   const ics = toICS(plan.sessions, { startTime: '18:00' });
 

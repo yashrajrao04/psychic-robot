@@ -49,45 +49,76 @@ const CONSOLIDATE_TASKS = [
   (t) => `Explain how ${t} connects to the other topics in this subject`,
 ];
 
-const CONSOLIDATE_SECOND = [
-  (t) => `Timed set: 15 minutes of mixed ${t} questions, no notes`,
-  (t) => `Re-attempt every question on ${t} you previously got wrong`,
-  (t) => `Attempt the hardest ${t} question you can find and narrate your reasoning`,
-];
 
 const REFLECT_TASK = (t) => `Rate your confidence in ${t} out of 5 and write one line on what is still shaky`;
 
 /**
+ * Per-rung task shapes. The work changes as the interval grows: early passes
+ * build the representation, middle passes test it under load, and the long
+ * intervals are pure retrieval — if you cannot recall it cold at D60, the
+ * earlier passes did not stick and the topic drops back down the ladder.
+ */
+const RUNG_TASKS = [
+  // D1 — Learn
+  (t, seed) => [
+    { text: pick(LEARN_TASKS, seed)(t), minutes: 25 },
+    { text: pick(LEARN_SECOND, seed + 1)(t), minutes: 10 },
+  ],
+  // D2 — First recall
+  (t) => [
+    { text: `Blank-page recall of ${t} — yesterday's material, notes closed`, minutes: 12 },
+    { text: `Fill the gaps you just found in your ${t} notes, in a different colour`, minutes: 8 },
+  ],
+  // D4 — Reinforce
+  (t, seed) => [
+    { text: pick(RECALL_TASKS, seed + 4)(t), minutes: 15 },
+    { text: `Do 8 practice questions on ${t} and log every error with its cause`, minutes: 20 },
+  ],
+  // D7 — Consolidate
+  (t, seed) => [
+    { text: pick(CONSOLIDATE_TASKS, seed + 2)(t), minutes: 20 },
+    { text: pick(RECALL_SECOND, seed + 5)(t), minutes: 20 },
+  ],
+  // D14 — Two-week review
+  (t) => [
+    { text: `Write a one-page cheat sheet for ${t} from memory, then fill the gaps in red`, minutes: 20 },
+    { text: `Re-attempt every ${t} question you previously got wrong`, minutes: 20 },
+  ],
+  // D30 — Monthly review
+  (t) => [
+    { text: `Cold recall: explain ${t} out loud with no warm-up and no notes`, minutes: 10 },
+    { text: `Timed set: 15 minutes of mixed ${t} questions`, minutes: 15 },
+    { text: `Note which parts have faded most — those decide whether this stays "hard"`, minutes: 5 },
+  ],
+  // D60 — Long-term review
+  (t) => [
+    { text: `Two-month check: recall ${t} from the title alone, then verify against your cheat sheet`, minutes: 12 },
+    { text: `Connect ${t} to at least two other topics you have studied since`, minutes: 10 },
+  ],
+  // D120 — Mastery check
+  (t) => [
+    { text: `Final check: teach ${t} end to end, unaided, in 5 minutes`, minutes: 10 },
+    { text: `Attempt the hardest ${t} question you can find and narrate your reasoning`, minutes: 20 },
+    { text: `If this still feels shaky, mark it hard again and restart the ladder`, minutes: 2 },
+  ],
+];
+
+/**
  * Build the day's checklist.
  *
- * @param {object} session `{ subject, topic, difficulty, repIndex, repCount }`
+ * @param {object} session `{ subject, topic, difficulty, repIndex, repCount, ladderStep }`
  * @returns {Array<{id: string, text: string, minutes: number}>}
  */
-export function buildTasks({ subject, topic, difficulty = 'medium', repIndex = 0, repCount = 3 }) {
+export function buildTasks({ subject, topic, difficulty = 'medium', repIndex = 0, repCount = 8, ladderStep }) {
   const seed = hash(`${subject}|${topic}`);
   const label = topic;
-  const isFinal = repIndex === repCount - 1;
+  const step = ladderStep ?? repIndex;
 
-  let items;
-  if (repIndex === 0) {
-    items = [
-      { text: pick(LEARN_TASKS, seed)(label), minutes: 25 },
-      { text: pick(LEARN_SECOND, seed + 1)(label), minutes: 10 },
-    ];
-  } else if (isFinal) {
-    items = [
-      { text: pick(CONSOLIDATE_TASKS, seed + 2)(label), minutes: 20 },
-      { text: pick(CONSOLIDATE_SECOND, seed + 3)(label), minutes: 20 },
-    ];
-  } else {
-    items = [
-      { text: pick(RECALL_TASKS, seed + 4)(label), minutes: 15 },
-      { text: pick(RECALL_SECOND, seed + 5)(label), minutes: 25 },
-    ];
-  }
+  const build = RUNG_TASKS[step] || RUNG_TASKS[RUNG_TASKS.length - 1];
+  const items = build(label, seed);
 
-  // Hard topics get an extra error-hunting pass; easy topics stay light.
-  if (difficulty === 'hard' && repIndex > 0) {
+  // Hard topics get an extra error-hunting pass once practice has begun.
+  if (difficulty === 'hard' && step >= 2 && step <= 4) {
     items.push({ text: `Review your error log for ${label} and redo the two worst mistakes`, minutes: 10 });
   }
 

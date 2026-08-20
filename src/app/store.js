@@ -3,7 +3,7 @@
  * Persisted to localStorage, with a tiny subscribe/notify loop driving re-render.
  */
 
-import { toISODate } from '../core/dates.js';
+import { fromISODate, toISODate } from '../core/dates.js';
 import { DEFAULT_DIFFICULTY } from '../core/scheduler.js';
 
 const STORAGE_KEY = 'study-buddy:v1';
@@ -21,7 +21,7 @@ function defaultState() {
     version: 1,
     settings: {
       startDate: toISODate(new Date()),
-      horizonDays: 28,
+      horizonDays: 126,
       availableWeekdays: [0, 1, 2, 3, 4, 5, 6],
       startTime: '18:00',
     },
@@ -46,6 +46,7 @@ export function load() {
     if (raw) {
       const parsed = JSON.parse(raw);
       state = { ...defaultState(), ...parsed, settings: { ...defaultState().settings, ...(parsed.settings || {}) } };
+      migrate(state);
     }
   } catch {
     // Corrupt or unavailable storage: fall back to a clean slate rather than
@@ -53,6 +54,18 @@ export function load() {
     state = defaultState();
   }
   return state;
+}
+
+/**
+ * Bring older saved state up to date. Topics predating per-topic start dates
+ * inherit the plan's original start, so an existing plan keeps exactly the
+ * schedule its owner has been following rather than jumping.
+ */
+function migrate(s) {
+  const fallback = s.settings.startDate || toISODate(new Date());
+  for (const topic of s.topics) {
+    if (!topic.startDate) topic.startDate = fallback;
+  }
 }
 
 function persist() {
@@ -109,6 +122,8 @@ export function topicsWithSubject() {
       color: subject ? subject.color : '#64748b',
       topic: topic.topic,
       difficulty: topic.difficulty,
+      startDate: topic.startDate ? fromISODate(topic.startDate) : null,
+      startDateISO: topic.startDate || null,
     };
   });
 }
@@ -149,10 +164,19 @@ export function removeSubject(id) {
   });
 }
 
-export function addTopic(subjectId, topicName, difficulty = DEFAULT_DIFFICULTY) {
+export function addTopic(subjectId, topicName, difficulty = DEFAULT_DIFFICULTY, startDate) {
   const trimmed = String(topicName || '').trim();
   if (!trimmed || !subjectId) return null;
-  const topic = { id: makeId('top'), subjectId, topic: trimmed, difficulty };
+  // Each topic remembers the day it was added and climbs the ladder from
+  // there. Without this, a topic added weeks into a plan would be back-dated
+  // to the plan's origin and land entirely in the past.
+  const topic = {
+    id: makeId('top'),
+    subjectId,
+    topic: trimmed,
+    difficulty,
+    startDate: startDate || toISODate(new Date()),
+  };
   update((s) => s.topics.push(topic));
   return topic;
 }
@@ -163,9 +187,10 @@ export function addTopicsBulk(subjectId, text, difficulty = DEFAULT_DIFFICULTY) 
     .split(/[\n,]/)
     .map((t) => t.trim())
     .filter(Boolean);
+  const today = toISODate(new Date());
   const added = [];
   for (const name of names) {
-    const topic = addTopic(subjectId, name, difficulty);
+    const topic = addTopic(subjectId, name, difficulty, today);
     if (topic) added.push(topic);
   }
   return added;
