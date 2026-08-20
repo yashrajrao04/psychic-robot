@@ -1,0 +1,14 @@
+{
+  "name": "study-buddy",
+  "version": "1.0.0",
+  "description": "Spaced-repetition Study Buddy app and revision calendar planner",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "test": "node --test \"test/**/*.test.js\"",
+    "serve": "node scripts/serve.js"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
