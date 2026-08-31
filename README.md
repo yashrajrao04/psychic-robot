@@ -10,7 +10,7 @@ your data stays in `localStorage`.
 
 ```bash
 npm run serve   # http://localhost:5173
-npm test        # 64 unit tests, no dependencies
+npm test        # 94 unit tests, no dependencies
 ```
 
 ## What it does
@@ -69,6 +69,30 @@ Learn Mode then walks the concept step by step, each step ending in something fo
 **Testing mode.** Questions are generated from the terms and claims in your own notes, so
 they stay on-topic. Two strong answers in a row raises the difficulty; two misses lowers it.
 
+**Pomodoro.** Focus blocks with breaks, wired to the plan: pick a topic that is due today and
+completed blocks are logged against it, so the focus log records time actually spent rather
+than time intended. The timer is stored as timestamps, not a counter, so it stays accurate
+through a backgrounded tab or a page reload. Leave the tab for longer than the phase and the
+finished block is still credited, but the next one waits for you — a count that included six
+breaks you never took would not be worth keeping. Skipping ahead never counts a part-finished
+block.
+
+**Feynman mode.** Explain a topic in plain words with your notes closed, and get a breakdown
+of where the explanation broke. It checks the things the technique exists to catch:
+
+- **Reciting.** Your wording is compared against your own notes, so lifted phrasing shows up
+  as a percentage instead of a feeling. This is the most diagnostic check there is.
+- **Unexplained jargon.** Every technical term is checked: did you unpack it, or lean on it?
+  "Photolysis is the key step" is an importance claim, not an explanation, and is counted as
+  jargon — that substitution is exactly the move the technique is designed to expose.
+- **Describing vs explaining.** How many sentences carry a *because* or a *so that*.
+- **Reading level**, hedging, circular definitions, analogies, and concepts your notes treat
+  as central that your explanation skipped.
+
+You get back a score and the questions a curious listener would ask next — never answers.
+When there are no notes to compare against, the two strongest checks cannot run, so the score
+is capped and labelled unverified rather than claiming a confidence it has not earned.
+
 **Export.** Google Calendar (`.ics` or CSV), Notion (markdown with real checkboxes, or a
 database CSV), and a flat one-row-per-task CSV for Excel or Sheets. Every export keeps the
 same shape: one topic per event per day, titled `[Subject] – [Topic]`, with the day's
@@ -115,13 +139,16 @@ src/core/       pure logic — no DOM, directly unit-tested
   notes.js      note parsing, structural coverage, Learn Mode
   testing.js    question generation, hints, adaptive difficulty
   policy.js     the no-direct-answers guard
+  pomodoro.js   focus/break state machine, driven by timestamps
+  feynman.js    explanation analysis — recital, jargon, reasoning, readability
   exporters.js  ICS / CSV / Notion output
 src/app/        DOM layer — store, helpers, one module per view
 test/           node:test suites for every core module
 ```
 
 `src/core` holds no browser APIs, so the scheduling and grading logic is testable directly
-under Node. The invariants that matter most — every topic landing exactly on the D1–D120
-ladder with zero drift, no topic scheduled before it was added, no topic repeating twice in
-a day, and exports that agree on wall-clock time — are asserted in `test/scheduler.test.js`
-and `test/exporters.test.js`.
+under Node. The invariants that matter most are asserted there: every topic landing exactly
+on the D1–D120 ladder with zero drift, no topic scheduled before it was added, no topic
+repeating twice in a day, exports that agree on wall-clock time, a Pomodoro that cannot lose
+or invent minutes, and a Feynman analyser that scores an explanation in your own words well
+above the same content copied out of your notes.

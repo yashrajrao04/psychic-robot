@@ -663,3 +663,89 @@ details > summary:hover { color: var(--accent); }
 
 .start-date { display: flex; align-items: center; gap: 0.25rem; flex: 0 0 auto; }
 .input-sm { width: auto; padding: 0.2rem 0.35rem; font-size: 0.78rem; }
+
+/* ------------------------------------------------------------- pomodoro */
+
+.timer-face {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 1.6rem 1rem;
+  border-radius: var(--radius);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  text-align: center;
+}
+.timer-face.phase-focus.is-running { border-color: color-mix(in srgb, var(--hard) 45%, var(--border)); }
+.timer-face.phase-shortBreak.is-running,
+.timer-face.phase-longBreak.is-running { border-color: color-mix(in srgb, var(--easy) 45%, var(--border)); }
+
+.timer-clock {
+  margin: 0;
+  font-size: clamp(3rem, 12vw, 5rem);
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+}
+.timer-face .progress { width: min(420px, 100%); height: 8px; }
+.phase-focus .progress-fill { background: var(--hard); }
+.phase-shortBreak .progress-fill,
+.phase-longBreak .progress-fill { background: var(--easy); }
+
+.cycle-dots { display: flex; gap: 0.35rem; }
+.cycle-dot {
+  width: 10px; height: 10px;
+  border-radius: 50%;
+  border: 2px solid var(--muted);
+  opacity: 0.5;
+}
+.cycle-dot.is-done { background: var(--accent); border-color: var(--accent); opacity: 1; }
+
+.centered-row { justify-content: center; }
+
+/* -------------------------------------------------------------- feynman */
+
+.explain-box { font-family: inherit; font-size: 0.95rem; }
+
+.score-row { display: flex; gap: 1.2rem; align-items: center; flex-wrap: wrap; }
+
+/* Conic-gradient ring: no library, and it reads at a glance. */
+.score-ring {
+  flex: 0 0 auto;
+  width: 116px; height: 116px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background:
+    conic-gradient(var(--ring-color) calc(var(--pct) * 1%), var(--surface-2) 0);
+  position: relative;
+}
+.score-ring::before {
+  content: '';
+  position: absolute;
+  inset: 9px;
+  border-radius: 50%;
+  background: var(--surface);
+}
+.score-ring.tone-easy { --ring-color: var(--easy); }
+.score-ring.tone-medium { --ring-color: var(--medium); }
+.score-ring.tone-hard { --ring-color: var(--hard); }
+.score-value { position: relative; font-size: 1.9rem; font-weight: 700; line-height: 1; }
+.score-label { position: relative; font-size: 0.66rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
+
+.metric-grid { flex: 1 1 320px; display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 0.7rem; }
+.metric { padding: 0.6rem 0.7rem; background: var(--surface-2); border-radius: var(--radius-sm); }
+.metric-value { margin: 0; font-size: 1.25rem; font-weight: 700; color: var(--accent); line-height: 1.2; }
+.metric-label { margin: 0.05rem 0 0.15rem; font-size: 0.78rem; font-weight: 600; }
+
+.question-list { margin: 0; padding-left: 1.2rem; display: flex; flex-direction: column; gap: 0.5rem; font-size: 0.95rem; }
+.question-list li { padding-left: 0.15rem; }
+
+.sub-bullets { margin: 0.3rem 0 0; padding-left: 1rem; font-size: 0.82rem; color: var(--muted); }
+.sub-bullets li { margin-bottom: 0.15rem; }
+
+.notes-peek { padding: 0.8rem; background: var(--surface-2); border-radius: var(--radius-sm); border: 1px solid var(--border); }
+.notes-peek .notes-raw { max-height: 260px; overflow: auto; }

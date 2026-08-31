@@ -5,6 +5,7 @@
 
 import { fromISODate, toISODate } from '../core/dates.js';
 import { DEFAULT_DIFFICULTY } from '../core/scheduler.js';
+import { DEFAULT_SETTINGS as POMODORO_DEFAULTS, createTimer } from '../core/pomodoro.js';
 
 const STORAGE_KEY = 'study-buddy:v1';
 
@@ -30,6 +31,8 @@ function defaultState() {
     progress: {},
     notes: {},
     cram: { topicIds: [], testDate: '', testTime: '09:00' },
+    pomodoro: { settings: { ...POMODORO_DEFAULTS }, timer: createTimer(), topicId: null, log: [] },
+    feynman: { topicId: null, drafts: {} },
     planView: 'calendar',
     tab: 'overview',
   };
@@ -66,6 +69,11 @@ function migrate(s) {
   for (const topic of s.topics) {
     if (!topic.startDate) topic.startDate = fallback;
   }
+  // Sections added after a save was written.
+  const base = defaultState();
+  if (!s.pomodoro) s.pomodoro = base.pomodoro;
+  else s.pomodoro.settings = { ...POMODORO_DEFAULTS, ...(s.pomodoro.settings || {}) };
+  if (!s.feynman) s.feynman = base.feynman;
 }
 
 function persist() {
@@ -302,6 +310,56 @@ export function toggleCramTopic(topicId) {
     const index = s.cram.topicIds.indexOf(topicId);
     if (index === -1) s.cram.topicIds.push(topicId);
     else s.cram.topicIds.splice(index, 1);
+  });
+}
+
+/* ------------------------------------------------------------- pomodoro -- */
+
+export function setTimer(timer) {
+  update((s) => {
+    s.pomodoro.timer = timer;
+  });
+}
+
+export function updatePomodoroSettings(patch) {
+  update((s) => Object.assign(s.pomodoro.settings, patch));
+}
+
+export function setPomodoroTopic(topicId) {
+  update((s) => {
+    s.pomodoro.topicId = topicId || null;
+  });
+}
+
+/** Record a finished focus block against whatever topic it was spent on. */
+export function logPomodoro({ topicId, minutes, endedAt = Date.now() }) {
+  update((s) => {
+    s.pomodoro.log.push({
+      iso: toISODate(new Date(endedAt)),
+      topicId: topicId || null,
+      minutes,
+      endedAt,
+    });
+    // A study log is a habit record, not an archive — keep it bounded.
+    if (s.pomodoro.log.length > 2000) s.pomodoro.log = s.pomodoro.log.slice(-2000);
+  });
+}
+
+/* -------------------------------------------------------------- feynman -- */
+
+export function setFeynmanTopic(topicId) {
+  update((s) => {
+    s.feynman.topicId = topicId || null;
+  });
+}
+
+export function getExplanation(topicId) {
+  return state.feynman.drafts[topicId] || '';
+}
+
+export function saveExplanation(topicId, text) {
+  update((s) => {
+    s.feynman.drafts[topicId] = text;
   });
 }
 

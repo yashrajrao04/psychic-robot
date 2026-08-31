@@ -11,15 +11,19 @@ import { renderCram } from './views/cram.js';
 import { renderBuddy } from './views/buddy.js';
 import { renderTesting } from './views/testing.js';
 import { renderExports } from './views/exports.js';
+import { renderPomodoro, startPomodoroEngine } from './views/pomodoro.js';
+import { renderFeynman } from './views/feynman.js';
 
 const TABS = [
   { key: 'overview', label: 'Overview' },
   { key: 'plan', label: 'Plan' },
-  { key: 'subjects', label: 'Subjects & topics' },
-  { key: 'cram', label: 'Cram mode' },
+  { key: 'subjects', label: 'Topics' },
+  { key: 'pomodoro', label: 'Pomodoro' },
+  { key: 'cram', label: 'Cram' },
   { key: 'buddy', label: 'Study Buddy' },
+  { key: 'feynman', label: 'Feynman' },
   { key: 'testing', label: 'Testing' },
-  { key: 'export', label: 'Sync & export' },
+  { key: 'export', label: 'Export' },
 ];
 
 function goToTab(tab) {
@@ -87,6 +91,12 @@ function render() {
     case 'testing':
       body = renderTesting(plan, { goToTab });
       break;
+    case 'pomodoro':
+      body = renderPomodoro(plan, { goToTab });
+      break;
+    case 'feynman':
+      body = renderFeynman(plan, { goToTab });
+      break;
     case 'export':
       body = renderExports(plan);
       break;
@@ -110,3 +120,5 @@ function render() {
 store.load();
 store.subscribe(render);
 render();
+// The clock runs for the life of the page, not the life of the Pomodoro view.
+startPomodoroEngine();
