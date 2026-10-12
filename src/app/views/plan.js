@@ -8,6 +8,7 @@ import * as store from '../store.js';
 import { groupByWeek } from '../../core/scheduler.js';
 import { WEEKDAY_NAMES, formatShort, toISODate } from '../../core/dates.js';
 import { googleCalendarLink } from '../../core/exporters.js';
+import { topicVideoList } from './learn.js';
 
 const VIEWS = [
   { key: 'timetable', label: 'Timetable' },
@@ -79,6 +80,8 @@ export function sessionCard(session, { showDate = true, open = false } = {}) {
       ],
       open,
     ),
+    // Videos meet you on the day the topic is due, not in a separate tab.
+    topicVideoList(store.topicsWithSubject().find((t) => t.id === session.topicId)),
   ]);
 }
 

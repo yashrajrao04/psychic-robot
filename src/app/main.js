@@ -13,11 +13,13 @@ import { renderTesting } from './views/testing.js';
 import { renderExports } from './views/exports.js';
 import { renderPomodoro, startPomodoroEngine } from './views/pomodoro.js';
 import { renderFeynman } from './views/feynman.js';
+import { renderLearn } from './views/learn.js';
 
 const TABS = [
   { key: 'overview', label: 'Overview' },
   { key: 'plan', label: 'Plan' },
   { key: 'subjects', label: 'Topics' },
+  { key: 'learn', label: 'Learn' },
   { key: 'pomodoro', label: 'Pomodoro' },
   { key: 'cram', label: 'Cram' },
   { key: 'buddy', label: 'Study Buddy' },
@@ -96,6 +98,9 @@ function render() {
       break;
     case 'feynman':
       body = renderFeynman(plan, { goToTab });
+      break;
+    case 'learn':
+      body = renderLearn(plan, { goToTab });
       break;
     case 'export':
       body = renderExports(plan);

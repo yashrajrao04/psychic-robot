@@ -10,7 +10,7 @@ your data stays in `localStorage`.
 
 ```bash
 npm run serve   # http://localhost:5173
-npm test        # 94 unit tests, no dependencies
+npm test        # 107 unit tests, no dependencies
 ```
 
 ## What it does
@@ -68,6 +68,30 @@ Learn Mode then walks the concept step by step, each step ending in something fo
 
 **Testing mode.** Questions are generated from the terms and claims in your own notes, so
 they stay on-topic. Two strong answers in a row raises the difficulty; two misses lowers it.
+
+**Learn.** A Khan Academy course catalog for grades 6–12 across maths, English, social studies
+and science, plus all 17 AP courses Khan Academy publishes. Filter by grade, subject or AP;
+open any course on Khan Academy; add a course to your plan and it becomes a topic on the
+D1–D120 ladder. Videos saved against a course play inline and appear on that topic's study
+days, so the video meets you on the day you are scheduled to revise it.
+
+Course names come from Khan Academy's own published course lists — including the fact that
+**there are no AP English courses**, so none are listed. AP entries carry Khan Academy's own
+caveat that those courses are supplementary and not College Board approved.
+
+Course links resolve through Khan Academy's search rather than hard-coded unit paths, because
+Khan Academy reorganises its slugs regularly and a deep path that works today is a 404 next
+term.
+
+**Videos are added by pasting a link, not shipped as a fixed list.** Khan Academy's video ids
+are not derivable from its lesson URLs, and a wrong YouTube id does not fail loudly — it
+silently plays something else, which is the worst possible outcome in a study tool aimed at
+school students. So the app resolves each pasted link against YouTube's public oEmbed endpoint
+at the moment you add it, stores the real title, and labels the channel: **✓ Khan Academy**
+when it genuinely is, a warning with the actual channel name when it is not, and "channel
+unconfirmed" when YouTube could not be reached. Link parsing accepts every YouTube form plus
+Khan Academy's own share link, refuses lookalike domains, and explains how to fix a link it
+cannot use rather than failing silently.
 
 **Pomodoro.** Focus blocks with breaks, wired to the plan: pick a topic that is due today and
 completed blocks are logged against it, so the focus log records time actually spent rather
@@ -139,6 +163,7 @@ src/core/       pure logic — no DOM, directly unit-tested
   notes.js      note parsing, structural coverage, Learn Mode
   testing.js    question generation, hints, adaptive difficulty
   policy.js     the no-direct-answers guard
+  khan.js       Khan Academy catalog + video id parsing and embedding
   pomodoro.js   focus/break state machine, driven by timestamps
   feynman.js    explanation analysis — recital, jargon, reasoning, readability
   exporters.js  ICS / CSV / Notion output

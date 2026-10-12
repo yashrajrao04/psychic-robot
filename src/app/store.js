@@ -33,6 +33,7 @@ function defaultState() {
     cram: { topicIds: [], testDate: '', testTime: '09:00' },
     pomodoro: { settings: { ...POMODORO_DEFAULTS }, timer: createTimer(), topicId: null, log: [] },
     feynman: { topicId: null, drafts: {} },
+    library: { videos: {}, grade: null, subject: 'math', apOnly: false },
     planView: 'calendar',
     tab: 'overview',
   };
@@ -74,6 +75,7 @@ function migrate(s) {
   if (!s.pomodoro) s.pomodoro = base.pomodoro;
   else s.pomodoro.settings = { ...POMODORO_DEFAULTS, ...(s.pomodoro.settings || {}) };
   if (!s.feynman) s.feynman = base.feynman;
+  if (!s.library) s.library = base.library;
 }
 
 function persist() {
@@ -132,6 +134,7 @@ export function topicsWithSubject() {
       difficulty: topic.difficulty,
       startDate: topic.startDate ? fromISODate(topic.startDate) : null,
       startDateISO: topic.startDate || null,
+      courseId: topic.courseId || null,
     };
   });
 }
@@ -172,7 +175,7 @@ export function removeSubject(id) {
   });
 }
 
-export function addTopic(subjectId, topicName, difficulty = DEFAULT_DIFFICULTY, startDate) {
+export function addTopic(subjectId, topicName, difficulty = DEFAULT_DIFFICULTY, startDate, courseId = null) {
   const trimmed = String(topicName || '').trim();
   if (!trimmed || !subjectId) return null;
   // Each topic remembers the day it was added and climbs the ladder from
@@ -184,6 +187,7 @@ export function addTopic(subjectId, topicName, difficulty = DEFAULT_DIFFICULTY, 
     topic: trimmed,
     difficulty,
     startDate: startDate || toISODate(new Date()),
+    courseId,
   };
   update((s) => s.topics.push(topic));
   return topic;
@@ -361,6 +365,55 @@ export function saveExplanation(topicId, text) {
   update((s) => {
     s.feynman.drafts[topicId] = text;
   });
+}
+
+/* -------------------------------------------------------------- library -- */
+
+export function setLibraryFilter(patch) {
+  update((s) => Object.assign(s.library, patch));
+}
+
+/** Videos saved against a Khan Academy course. */
+export function videosFor(courseId) {
+  return state.library.videos[courseId] || [];
+}
+
+export function addVideo(courseId, video) {
+  update((s) => {
+    const list = s.library.videos[courseId] || (s.library.videos[courseId] = []);
+    if (list.some((v) => v.videoId === video.videoId)) return;
+    list.push({ addedAt: Date.now(), ...video });
+  });
+}
+
+export function removeVideo(courseId, videoId) {
+  update((s) => {
+    const list = s.library.videos[courseId];
+    if (!list) return;
+    s.library.videos[courseId] = list.filter((v) => v.videoId !== videoId);
+  });
+}
+
+/** Update a saved video in place — used when its real title resolves later. */
+export function updateVideo(courseId, videoId, patch) {
+  update((s) => {
+    const video = (s.library.videos[courseId] || []).find((v) => v.videoId === videoId);
+    if (video) Object.assign(video, patch);
+  });
+}
+
+/** Link an existing topic to a Khan Academy course, so its videos follow it. */
+export function setTopicCourse(topicId, courseId) {
+  update((s) => {
+    const topic = s.topics.find((t) => t.id === topicId);
+    if (topic) topic.courseId = courseId || null;
+  });
+}
+
+/** Find or create a subject by name, so catalog imports do not duplicate it. */
+export function ensureSubject(name) {
+  const existing = state.subjects.find((s) => s.name.toLowerCase() === String(name).toLowerCase());
+  return existing || addSubject(name);
 }
 
 /* ------------------------------------------------------------ seed/reset -- */
