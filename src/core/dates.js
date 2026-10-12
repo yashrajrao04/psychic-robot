@@ -67,13 +67,31 @@ export function formatLong(date) {
   });
 }
 
+const pad2 = (n) => String(n).padStart(2, '0');
+
 /**
- * Compact UTC stamp used by the iCalendar exporter, e.g. `20251103T090000Z`.
+ * Absolute UTC stamp, e.g. `20251103T090000Z`. Used for DTSTAMP, which records
+ * when the file was written and genuinely is a moment in time.
  */
 export function toICSStamp(date) {
-  const pad = (n) => String(n).padStart(2, '0');
   return (
-    `${date.getUTCFullYear()}${pad(date.getUTCMonth() + 1)}${pad(date.getUTCDate())}` +
-    `T${pad(date.getUTCHours())}${pad(date.getUTCMinutes())}${pad(date.getUTCSeconds())}Z`
+    `${date.getUTCFullYear()}${pad2(date.getUTCMonth() + 1)}${pad2(date.getUTCDate())}` +
+    `T${pad2(date.getUTCHours())}${pad2(date.getUTCMinutes())}${pad2(date.getUTCSeconds())}Z`
+  );
+}
+
+/**
+ * Local wall-clock stamp with no timezone suffix, e.g. `20251103T090000`.
+ *
+ * RFC 5545 calls this a floating time, and it is the right semantics for a
+ * study session: 18:00 means six in the evening wherever you happen to be.
+ * Writing an absolute UTC instant instead would move every session by the
+ * offset between the machine that generated the file and the calendar that
+ * reads it — and would shift again the moment you travelled.
+ */
+export function toICSLocalStamp(date) {
+  return (
+    `${date.getFullYear()}${pad2(date.getMonth() + 1)}${pad2(date.getDate())}` +
+    `T${pad2(date.getHours())}${pad2(date.getMinutes())}${pad2(date.getSeconds())}`
   );
 }

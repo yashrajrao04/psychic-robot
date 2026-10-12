@@ -8,6 +8,7 @@ import * as store from '../store.js';
 import { groupByWeek } from '../../core/scheduler.js';
 import { WEEKDAY_NAMES, formatShort, toISODate } from '../../core/dates.js';
 import { googleCalendarLink } from '../../core/exporters.js';
+import { topicVideoList } from './learn.js';
 
 const VIEWS = [
   { key: 'timetable', label: 'Timetable' },
@@ -46,7 +47,7 @@ export function progressBar(percent) {
   ]);
 }
 
-/** One day's card: the single topic, its pass label and its checklist. */
+/** One session card: the topic, its rung on the ladder and its checklist. */
 export function sessionCard(session, { showDate = true, open = false } = {}) {
   const percent = store.sessionProgress(session);
   const total = (session.tasks || []).reduce((sum, t) => sum + (t.minutes || 0), 0);
@@ -79,6 +80,8 @@ export function sessionCard(session, { showDate = true, open = false } = {}) {
       ],
       open,
     ),
+    // Videos meet you on the day the topic is due, not in a separate tab.
+    topicVideoList(store.topicsWithSubject().find((t) => t.id === session.topicId)),
   ]);
 }
 
@@ -166,29 +169,46 @@ function calendarView(plan) {
           { class: 'calendar-row' },
           days.map((day) => {
             const isToday = day.iso === todayISO;
-            const session = day.session;
-            const percent = session ? store.sessionProgress(session) : 0;
+            const sessions = day.sessions;
+            const tasks = sessions.reduce((n, s) => n + s.tasks.length, 0);
+            const done = sessions.reduce(
+              (n, s) => n + s.tasks.filter((t) => store.isTaskDone(s.id, t.id)).length,
+              0,
+            );
+            const percent = tasks ? Math.round((done / tasks) * 100) : 0;
+            const lead = sessions[0];
 
             return el(
               'div',
               {
                 class:
                   `calendar-cell${isToday ? ' is-today' : ''}` +
-                  `${!day.available ? ' is-off' : ''}${session ? ` diff-${session.difficulty}` : ' is-empty'}` +
-                  `${percent === 100 ? ' is-complete' : ''}`,
+                  `${!day.available ? ' is-off' : ''}${lead ? ` diff-${lead.difficulty}` : ' is-empty'}` +
+                  `${tasks && percent === 100 ? ' is-complete' : ''}${sessions.length > 1 ? ' is-busy' : ''}`,
               },
               [
                 el('div', { class: 'cell-date' }, [
                   el('span', { text: String(day.date.getDate()) }),
                   isToday ? el('span', { class: 'today-badge', text: 'Today' }) : null,
+                  sessions.length > 1
+                    ? el('span', { class: 'load-badge', title: `${day.load} min of work`, text: `${sessions.length}×` })
+                    : null,
                 ]),
-                session
+                sessions.length
                   ? el('div', { class: 'cell-body' }, [
-                      el('p', { class: 'cell-subject', text: session.subject }),
-                      el('p', { class: 'cell-topic', text: session.topic }),
-                      el('p', { class: 'cell-pass', text: session.repLabel }),
+                      ...sessions.map((session) =>
+                        el('div', { class: `cell-entry diff-${session.difficulty}` }, [
+                          el('p', { class: 'cell-subject', text: session.subject }),
+                          el('p', { class: 'cell-topic', text: session.topic }),
+                          el('p', { class: 'cell-pass', text: `${session.repLabel} · D${session.ladderDay}` }),
+                          details(
+                            `cell:${session.id}`,
+                            `${session.tasks.length} tasks`,
+                            checklist(session),
+                          ),
+                        ]),
+                      ),
                       progressBar(percent),
-                      details(`cell:${session.id}`, `${session.tasks.length} tasks`, checklist(session)),
                     ])
                   : el('p', { class: 'cell-rest', text: day.available ? 'Rest / buffer' : 'Off' }),
               ],
@@ -253,24 +273,48 @@ function timelineView(plan) {
         el(
           'div',
           { class: 'timeline-track' },
-          sessions.map((s, i) => [
-            i > 0
-              ? el('span', {
-                  class: 'timeline-gap',
-                  style: {
-                    left: `${(sessions[i - 1].dayIndex / span) * 100}%`,
-                    width: `${((s.dayIndex - sessions[i - 1].dayIndex) / span) * 100}%`,
-                  },
-                  title: `${s.dayIndex - sessions[i - 1].dayIndex} day gap`,
-                })
-              : null,
-            el('span', {
-              class: `timeline-dot diff-${s.difficulty}`,
-              style: { left: `${(s.dayIndex / span) * 100}%` },
-              title: `${formatShort(s.date)} — ${s.repLabel}`,
-              text: String(i + 1),
-            }),
-          ]),
+          // Positions are linear in time, but the early rungs (D1 and D2) sit
+          // one day apart out of ~150 — a few pixels — so the later dot would
+          // sit right on top of the earlier one and hide it. Nudge each dot
+          // right by however many pixels it needs to clear its predecessor.
+          // The nudge is in absolute px, so it holds at any track width, and
+          // the exact date stays in the tooltip.
+          (() => {
+            const DOT = 22;
+            const MIN_GAP_PX = 20;
+            const ASSUMED_TRACK = 320; // conservative: the narrowest layout
+            const usable = ASSUMED_TRACK - DOT;
+
+            let lastPx = -Infinity;
+            const nudges = sessions.map((s) => {
+              const idealPx = (s.dayIndex / span) * usable;
+              const placedPx = Math.max(idealPx, lastPx + MIN_GAP_PX);
+              lastPx = placedPx;
+              return Math.round(placedPx - idealPx);
+            });
+
+            const at = (dayIndex, nudge = 0) =>
+              `calc(11px + ${(dayIndex / span).toFixed(4)} * (100% - ${DOT}px) + ${nudge}px)`;
+
+            return sessions.map((s, i) => [
+              i > 0
+                ? el('span', {
+                    class: 'timeline-gap',
+                    style: {
+                      left: at(sessions[i - 1].dayIndex, nudges[i - 1]),
+                      width: `calc(${((s.dayIndex - sessions[i - 1].dayIndex) / span).toFixed(4)} * (100% - ${DOT}px) + ${nudges[i] - nudges[i - 1]}px)`,
+                    },
+                    title: `${s.dayIndex - sessions[i - 1].dayIndex} day gap`,
+                  })
+                : null,
+              el('span', {
+                class: `timeline-dot diff-${s.difficulty}`,
+                style: { left: at(s.dayIndex, nudges[i]) },
+                title: `${formatShort(s.date)} — ${s.repLabel} (D${s.ladderDay})`,
+                text: String(i + 1),
+              }),
+            ]);
+          })(),
         ),
       ]);
     }),
@@ -332,7 +376,7 @@ export function renderPlan(plan) {
           el('p', {
             class: 'muted',
             text:
-              `${plan.sessions.length} sessions across ${plan.weeks} weeks · one topic per day · ` +
+              `${plan.sessions.length} sessions across ${plan.weeks} weeks · exact D1–D120 timing · ` +
               `${doneTasks}/${totalTasks} tasks done`,
           }),
         ]),
@@ -343,8 +387,16 @@ export function renderPlan(plan) {
           ? el('p', {
               class: 'notice',
               text:
-                `Your topics need ${plan.overflowDays} day(s) beyond the ${state.settings.horizonDays / 7}-week window, ` +
-                'so the plan was extended rather than doubling topics onto shared days.',
+                `The ladder runs ${plan.overflowDays} day(s) past your ${Math.round(state.settings.horizonDays / 7)}-week ` +
+                'window, so the plan was extended to keep the final D120 review.',
+            })
+          : null,
+        plan.busiestDay > 1
+          ? el('p', {
+              class: 'notice',
+              text:
+                `Intervals are exact, so days can stack: your busiest carries ${plan.busiestDay} topics. ` +
+                'To spread the load, add topics on different days rather than all at once — each one starts its ladder the day you add it.',
             })
           : null,
         body,

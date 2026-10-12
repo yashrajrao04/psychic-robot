@@ -9,7 +9,7 @@ function topics(specs) {
   return specs.map(([topic, difficulty], i) => ({ id: `t${i}`, subject: 'Exam', topic, difficulty }));
 }
 
-test('one topic per day still holds under cram pressure', () => {
+test('cram spreads topics across the runway without dropping any', () => {
   const result = planCram({
     topics: topics([
       ['Kinematics', 'hard'],
@@ -23,8 +23,17 @@ test('one topic per day still holds under cram pressure', () => {
   });
 
   assert.ok(result.ok);
-  const days = result.sessions.map((s) => s.dayIndex);
-  assert.equal(new Set(days).size, days.length, 'no day holds two topics');
+  assert.equal(result.uncovered.length, 0, 'every selected topic is covered');
+
+  // A topic may share a day with another, but never with itself.
+  const byDay = new Map();
+  for (const s of result.sessions) {
+    const key = `${s.dayIndex}`;
+    byDay.set(key, [...(byDay.get(key) || []), s.topicId]);
+  }
+  for (const [day, ids] of byDay) {
+    assert.equal(new Set(ids).size, ids.length, `day ${day} repeats a topic`);
+  }
 });
 
 test('hard topics are seen first', () => {
@@ -104,7 +113,7 @@ test('uses the full runway, finishing on the last day before the test', () => {
   assert.equal(result.sessions[0].dayIndex, 0, 'and the first pass starts immediately');
 });
 
-test('reports topics that cannot fit rather than doubling them up', () => {
+test('a short runway stacks days rather than abandoning topics', () => {
   const result = planCram({
     topics: topics([
       ['A', 'hard'],
@@ -118,8 +127,12 @@ test('reports topics that cannot fit rather than doubling them up', () => {
   });
 
   assert.ok(result.ok);
-  assert.equal(result.sessions.length, 2, 'two days means two sessions, no more');
-  assert.equal(result.uncovered.length, 3, 'the rest are reported as uncovered');
+  assert.equal(result.uncovered.length, 0, 'nothing is abandoned for lack of room');
+  assert.ok(result.busiestDay > 1, 'the crowding is real and reported');
+
+  for (const session of result.sessions) {
+    assert.ok(session.dayIndex <= 1, 'still nothing scheduled past the runway');
+  }
 });
 
 test('falls back to hour blocks when the test is today', () => {

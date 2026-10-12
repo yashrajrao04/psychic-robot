@@ -3,8 +3,9 @@
  * Persisted to localStorage, with a tiny subscribe/notify loop driving re-render.
  */
 
-import { toISODate } from '../core/dates.js';
+import { fromISODate, toISODate } from '../core/dates.js';
 import { DEFAULT_DIFFICULTY } from '../core/scheduler.js';
+import { DEFAULT_SETTINGS as POMODORO_DEFAULTS, createTimer } from '../core/pomodoro.js';
 
 const STORAGE_KEY = 'study-buddy:v1';
 
@@ -21,7 +22,7 @@ function defaultState() {
     version: 1,
     settings: {
       startDate: toISODate(new Date()),
-      horizonDays: 28,
+      horizonDays: 126,
       availableWeekdays: [0, 1, 2, 3, 4, 5, 6],
       startTime: '18:00',
     },
@@ -30,6 +31,9 @@ function defaultState() {
     progress: {},
     notes: {},
     cram: { topicIds: [], testDate: '', testTime: '09:00' },
+    pomodoro: { settings: { ...POMODORO_DEFAULTS }, timer: createTimer(), topicId: null, log: [] },
+    feynman: { topicId: null, drafts: {} },
+    library: { videos: {}, grade: null, subject: 'math', apOnly: false },
     planView: 'calendar',
     tab: 'overview',
   };
@@ -46,6 +50,7 @@ export function load() {
     if (raw) {
       const parsed = JSON.parse(raw);
       state = { ...defaultState(), ...parsed, settings: { ...defaultState().settings, ...(parsed.settings || {}) } };
+      migrate(state);
     }
   } catch {
     // Corrupt or unavailable storage: fall back to a clean slate rather than
@@ -53,6 +58,24 @@ export function load() {
     state = defaultState();
   }
   return state;
+}
+
+/**
+ * Bring older saved state up to date. Topics predating per-topic start dates
+ * inherit the plan's original start, so an existing plan keeps exactly the
+ * schedule its owner has been following rather than jumping.
+ */
+function migrate(s) {
+  const fallback = s.settings.startDate || toISODate(new Date());
+  for (const topic of s.topics) {
+    if (!topic.startDate) topic.startDate = fallback;
+  }
+  // Sections added after a save was written.
+  const base = defaultState();
+  if (!s.pomodoro) s.pomodoro = base.pomodoro;
+  else s.pomodoro.settings = { ...POMODORO_DEFAULTS, ...(s.pomodoro.settings || {}) };
+  if (!s.feynman) s.feynman = base.feynman;
+  if (!s.library) s.library = base.library;
 }
 
 function persist() {
@@ -109,6 +132,9 @@ export function topicsWithSubject() {
       color: subject ? subject.color : '#64748b',
       topic: topic.topic,
       difficulty: topic.difficulty,
+      startDate: topic.startDate ? fromISODate(topic.startDate) : null,
+      startDateISO: topic.startDate || null,
+      courseId: topic.courseId || null,
     };
   });
 }
@@ -149,10 +175,20 @@ export function removeSubject(id) {
   });
 }
 
-export function addTopic(subjectId, topicName, difficulty = DEFAULT_DIFFICULTY) {
+export function addTopic(subjectId, topicName, difficulty = DEFAULT_DIFFICULTY, startDate, courseId = null) {
   const trimmed = String(topicName || '').trim();
   if (!trimmed || !subjectId) return null;
-  const topic = { id: makeId('top'), subjectId, topic: trimmed, difficulty };
+  // Each topic remembers the day it was added and climbs the ladder from
+  // there. Without this, a topic added weeks into a plan would be back-dated
+  // to the plan's origin and land entirely in the past.
+  const topic = {
+    id: makeId('top'),
+    subjectId,
+    topic: trimmed,
+    difficulty,
+    startDate: startDate || toISODate(new Date()),
+    courseId,
+  };
   update((s) => s.topics.push(topic));
   return topic;
 }
@@ -163,9 +199,10 @@ export function addTopicsBulk(subjectId, text, difficulty = DEFAULT_DIFFICULTY) 
     .split(/[\n,]/)
     .map((t) => t.trim())
     .filter(Boolean);
+  const today = toISODate(new Date());
   const added = [];
   for (const name of names) {
-    const topic = addTopic(subjectId, name, difficulty);
+    const topic = addTopic(subjectId, name, difficulty, today);
     if (topic) added.push(topic);
   }
   return added;
@@ -175,6 +212,17 @@ export function setTopicDifficulty(id, difficulty) {
   update((s) => {
     const topic = s.topics.find((t) => t.id === id);
     if (topic) topic.difficulty = difficulty;
+  });
+}
+
+/**
+ * Move a topic's ladder. Every rung is relative to this date, so this is how a
+ * learner spreads load without waiting days to add topics one at a time.
+ */
+export function setTopicStartDate(id, iso) {
+  update((s) => {
+    const topic = s.topics.find((t) => t.id === id);
+    if (topic && iso) topic.startDate = iso;
   });
 }
 
@@ -267,6 +315,105 @@ export function toggleCramTopic(topicId) {
     if (index === -1) s.cram.topicIds.push(topicId);
     else s.cram.topicIds.splice(index, 1);
   });
+}
+
+/* ------------------------------------------------------------- pomodoro -- */
+
+export function setTimer(timer) {
+  update((s) => {
+    s.pomodoro.timer = timer;
+  });
+}
+
+export function updatePomodoroSettings(patch) {
+  update((s) => Object.assign(s.pomodoro.settings, patch));
+}
+
+export function setPomodoroTopic(topicId) {
+  update((s) => {
+    s.pomodoro.topicId = topicId || null;
+  });
+}
+
+/** Record a finished focus block against whatever topic it was spent on. */
+export function logPomodoro({ topicId, minutes, endedAt = Date.now() }) {
+  update((s) => {
+    s.pomodoro.log.push({
+      iso: toISODate(new Date(endedAt)),
+      topicId: topicId || null,
+      minutes,
+      endedAt,
+    });
+    // A study log is a habit record, not an archive — keep it bounded.
+    if (s.pomodoro.log.length > 2000) s.pomodoro.log = s.pomodoro.log.slice(-2000);
+  });
+}
+
+/* -------------------------------------------------------------- feynman -- */
+
+export function setFeynmanTopic(topicId) {
+  update((s) => {
+    s.feynman.topicId = topicId || null;
+  });
+}
+
+export function getExplanation(topicId) {
+  return state.feynman.drafts[topicId] || '';
+}
+
+export function saveExplanation(topicId, text) {
+  update((s) => {
+    s.feynman.drafts[topicId] = text;
+  });
+}
+
+/* -------------------------------------------------------------- library -- */
+
+export function setLibraryFilter(patch) {
+  update((s) => Object.assign(s.library, patch));
+}
+
+/** Videos saved against a Khan Academy course. */
+export function videosFor(courseId) {
+  return state.library.videos[courseId] || [];
+}
+
+export function addVideo(courseId, video) {
+  update((s) => {
+    const list = s.library.videos[courseId] || (s.library.videos[courseId] = []);
+    if (list.some((v) => v.videoId === video.videoId)) return;
+    list.push({ addedAt: Date.now(), ...video });
+  });
+}
+
+export function removeVideo(courseId, videoId) {
+  update((s) => {
+    const list = s.library.videos[courseId];
+    if (!list) return;
+    s.library.videos[courseId] = list.filter((v) => v.videoId !== videoId);
+  });
+}
+
+/** Update a saved video in place — used when its real title resolves later. */
+export function updateVideo(courseId, videoId, patch) {
+  update((s) => {
+    const video = (s.library.videos[courseId] || []).find((v) => v.videoId === videoId);
+    if (video) Object.assign(video, patch);
+  });
+}
+
+/** Link an existing topic to a Khan Academy course, so its videos follow it. */
+export function setTopicCourse(topicId, courseId) {
+  update((s) => {
+    const topic = s.topics.find((t) => t.id === topicId);
+    if (topic) topic.courseId = courseId || null;
+  });
+}
+
+/** Find or create a subject by name, so catalog imports do not duplicate it. */
+export function ensureSubject(name) {
+  const existing = state.subjects.find((s) => s.name.toLowerCase() === String(name).toLowerCase());
+  return existing || addSubject(name);
 }
 
 /* ------------------------------------------------------------ seed/reset -- */

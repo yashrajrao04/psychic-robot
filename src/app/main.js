@@ -11,15 +11,21 @@ import { renderCram } from './views/cram.js';
 import { renderBuddy } from './views/buddy.js';
 import { renderTesting } from './views/testing.js';
 import { renderExports } from './views/exports.js';
+import { renderPomodoro, startPomodoroEngine } from './views/pomodoro.js';
+import { renderFeynman } from './views/feynman.js';
+import { renderLearn } from './views/learn.js';
 
 const TABS = [
   { key: 'overview', label: 'Overview' },
   { key: 'plan', label: 'Plan' },
-  { key: 'subjects', label: 'Subjects & topics' },
-  { key: 'cram', label: 'Cram mode' },
+  { key: 'subjects', label: 'Topics' },
+  { key: 'learn', label: 'Learn' },
+  { key: 'pomodoro', label: 'Pomodoro' },
+  { key: 'cram', label: 'Cram' },
   { key: 'buddy', label: 'Study Buddy' },
+  { key: 'feynman', label: 'Feynman' },
   { key: 'testing', label: 'Testing' },
-  { key: 'export', label: 'Sync & export' },
+  { key: 'export', label: 'Export' },
 ];
 
 function goToTab(tab) {
@@ -44,7 +50,7 @@ function header(activeTab) {
       el('span', { class: 'logo', text: '◱' }),
       el('div', {}, [
         el('h1', { text: 'Study Buddy' }),
-        el('p', { class: 'tagline', text: 'Spaced repetition, one topic a day.' }),
+        el('p', { class: 'tagline', text: 'Spaced repetition on D1 · D2 · D4 · D7 · D14 · D30 · D60 · D120.' }),
       ]),
     ]),
     el(
@@ -87,6 +93,15 @@ function render() {
     case 'testing':
       body = renderTesting(plan, { goToTab });
       break;
+    case 'pomodoro':
+      body = renderPomodoro(plan, { goToTab });
+      break;
+    case 'feynman':
+      body = renderFeynman(plan, { goToTab });
+      break;
+    case 'learn':
+      body = renderLearn(plan, { goToTab });
+      break;
     case 'export':
       body = renderExports(plan);
       break;
@@ -110,3 +125,5 @@ function render() {
 store.load();
 store.subscribe(render);
 render();
+// The clock runs for the life of the page, not the life of the Pomodoro view.
+startPomodoroEngine();

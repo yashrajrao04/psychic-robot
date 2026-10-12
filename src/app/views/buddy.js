@@ -266,7 +266,7 @@ export function renderBuddy(plan, { goToTab } = {}) {
               class: 'notice',
               text:
                 `Coverage is ${comparison.coverageScore}% — thin enough that this topic needs more passes, not more reading. ` +
-                'Marking it hard schedules it on day 1, day 3–4 and again two weeks later.',
+                'Marking it hard puts it on every rung of the ladder: D1, D2, D4, D7, D14, D30, D60 and D120.',
             }),
             topic.difficulty !== 'hard'
               ? el('button', {

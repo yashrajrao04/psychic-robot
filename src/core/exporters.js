@@ -7,7 +7,7 @@
  *   - event description: the checklist of tasks for that day
  */
 
-import { fromISODate, toICSStamp } from './dates.js';
+import { fromISODate, toICSLocalStamp, toICSStamp } from './dates.js';
 
 export const DEFAULT_START_TIME = '18:00';
 export const DEFAULT_DURATION_MINUTES = 60;
@@ -167,8 +167,9 @@ export function toICS(sessions, { startTime = DEFAULT_START_TIME, calendarName =
       'BEGIN:VEVENT',
       `UID:${session.id || `s${index}`}-${session.iso}@study-buddy`,
       `DTSTAMP:${stamp}`,
-      `DTSTART:${toICSStamp(start)}`,
-      `DTEND:${toICSStamp(end)}`,
+      // Floating local time — see toICSLocalStamp. 18:00 must stay 18:00.
+      `DTSTART:${toICSLocalStamp(start)}`,
+      `DTEND:${toICSLocalStamp(end)}`,
       icsFold(`SUMMARY:${icsEscape(eventTitle(session))}`),
       icsFold(`DESCRIPTION:${icsEscape(eventDescription(session))}`),
       'BEGIN:VALARM',
@@ -190,9 +191,8 @@ export function toICS(sessions, { startTime = DEFAULT_START_TIME, calendarName =
  */
 export function googleCalendarLink(session, { startTime = DEFAULT_START_TIME } = {}) {
   const { start, end } = sessionTimes(session, startTime);
-  const fmt = (d) =>
-    `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}` +
-    `T${String(d.getHours()).padStart(2, '0')}${String(d.getMinutes()).padStart(2, '0')}00`;
+  // Same floating local wall time as the .ics, so both routes agree.
+  const fmt = toICSLocalStamp;
 
   const params = new URLSearchParams({
     action: 'TEMPLATE',

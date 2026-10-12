@@ -2,7 +2,7 @@
 
 import { el, section, empty } from '../dom.js';
 import * as store from '../store.js';
-import { DIFFICULTY_PROFILES } from '../../core/scheduler.js';
+import { DIFFICULTY_PROFILES, LADDER_DAYS, ladderFor } from '../../core/scheduler.js';
 import { WEEKDAY_NAMES } from '../../core/dates.js';
 
 const DIFFICULTIES = Object.values(DIFFICULTY_PROFILES);
@@ -15,7 +15,7 @@ function difficultyPicker(topic) {
       el('button', {
         class: `chip chip-${profile.key}${topic.difficulty === profile.key ? ' is-active' : ''}`,
         type: 'button',
-        title: `${profile.label}: ${profile.offsets.length} passes, days ${profile.offsets.map((o) => o + 1).join(' / ')}`,
+        title: `${profile.label}: ${ladderFor(profile.key).length} passes on D${ladderFor(profile.key).map((r) => r.day).join(' / D')}`,
         text: profile.label,
         onClick: () => store.setTopicDifficulty(topic.id, profile.key),
       }),
@@ -28,6 +28,19 @@ function topicRow(topic, index, total) {
     el('span', { class: 'topic-name' }, [
       el('span', { class: `dot dot-${topic.difficulty}` }),
       el('span', { text: topic.topic }),
+    ]),
+    el('label', { class: 'start-date' }, [
+      el('span', { class: 'muted small', text: 'D1' }),
+      el('input', {
+        type: 'date',
+        class: 'input input-sm',
+        // Raw store topics carry startDate as an ISO string; the joined shape
+        // used elsewhere carries a Date under a different key.
+        value: topic.startDate || '',
+        title: `Day 1 for ${topic.topic} — every rung is measured from here`,
+        'aria-label': `Start date for ${topic.topic}`,
+        onChange: (e) => store.setTopicStartDate(topic.id, e.target.value),
+      }),
     ]),
     difficultyPicker(topic),
     el('div', { class: 'row-actions' }, [
@@ -137,8 +150,12 @@ function settingsPanel() {
             class: 'input select',
             onChange: (e) => store.updateSettings({ horizonDays: Number(e.target.value) }),
           },
-          [14, 21, 28, 42, 56].map((days) =>
-            el('option', { value: days, text: `${days / 7} weeks`, selected: settings.horizonDays === days }),
+          [28, 56, 84, 126, 182].map((days) =>
+            el('option', {
+              value: days,
+              text: `${days / 7} weeks${days === 126 ? ' (full ladder)' : ''}`,
+              selected: settings.horizonDays === days,
+            }),
           ),
         ),
       ]),
@@ -173,7 +190,12 @@ function settingsPanel() {
           }),
         ),
       ),
-      el('p', { class: 'muted small', text: 'Days you switch off stay empty. The plan simply grows longer to fit.' }),
+      el('p', {
+        class: 'muted small',
+        text:
+          'Switching a day off is the only thing that can shift a rung: sessions landing there move to the ' +
+          'nearest day you do study. Leave all seven on and the ladder is exact.',
+      }),
     ]),
   ]);
 }
@@ -199,7 +221,8 @@ export function renderSubjects() {
   return el('div', { class: 'view' }, [
     section(
       'Subjects & topics',
-      'One row per subject. Mark each topic hard, medium or easy — that is what decides how often it comes back.',
+      `Every topic climbs the same expanding ladder — D${LADDER_DAYS.join(', D')} — and difficulty decides ` +
+        'how many of those rungs it uses. Hard topics take all eight; easier ones skip the dense early passes.',
       [
         addForm,
         state.subjects.length

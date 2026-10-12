@@ -36,6 +36,28 @@ test('event descriptions carry the day checklist', () => {
   }
 });
 
+test('ICS times are floating local, so 18:00 stays 18:00 anywhere', () => {
+  const ics = toICS(plan.sessions, { startTime: '18:00' });
+
+  const starts = ics.match(/DTSTART:[^\r\n]*/g);
+  for (const line of starts) {
+    assert.match(line, /^DTSTART:\d{8}T180000$/, `expected floating 18:00, got "${line}"`);
+    assert.ok(!line.endsWith('Z'), 'an absolute UTC instant would shift when imported elsewhere');
+  }
+
+  // DTSTAMP genuinely is a moment in time and stays absolute.
+  assert.match(ics.match(/DTSTAMP:[^\r\n]*/)[0], /Z$/);
+
+  // The Google link must agree with the .ics rather than contradicting it.
+  const gcal = new URL(googleCalendarLink(plan.sessions[0], { startTime: '18:00' }));
+  assert.equal(gcal.searchParams.get('dates').split('/')[0], starts[0].replace('DTSTART:', ''));
+});
+
+test('the CSV start time matches the ICS start time', () => {
+  const csvTime = toCSV(plan.sessions, { startTime: '18:00' }).split('\r\n')[1].split(',')[2];
+  assert.equal(csvTime, '6:00 PM', 'all three exports describe the same wall-clock time');
+});
+
 test('ICS output is well formed and has one event per session', () => {
   const ics = toICS(plan.sessions, { startTime: '18:00' });
 
@@ -134,7 +156,7 @@ function parseCSV(text) {
   return rows;
 }
 
-test('exported CSV round-trips through a real parser, one event per day', () => {
+test('exported CSV round-trips through a real parser', () => {
   const rows = parseCSV(toNotionCSV(plan.sessions));
   const [header, ...body] = rows;
 
@@ -146,6 +168,8 @@ test('exported CSV round-trips through a real parser, one event per day', () => 
   assert.equal(mathsRow[0], 'Maths – Integration, by parts');
   assert.equal(mathsRow[3], 'Integration, by parts');
 
-  const dates = body.map((r) => r[1]);
-  assert.equal(new Set(dates).size, dates.length, 'one event per day, end to end');
+  // Timing is exact, so several topics can legitimately share a date. What
+  // must stay unique is the event identity: one row per topic-and-rung.
+  const identities = body.map((r) => `${r[1]}|${r[3]}|${r[4]}`);
+  assert.equal(new Set(identities).size, identities.length, 'no duplicated events');
 });

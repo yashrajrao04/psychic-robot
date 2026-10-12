@@ -3,7 +3,7 @@
 import { el, section, empty } from '../dom.js';
 import * as store from '../store.js';
 import { sessionCard, progressBar } from './plan.js';
-import { sessionOn, upcomingSessions } from '../../core/scheduler.js';
+import { sessionsOn, upcomingSessions } from '../../core/scheduler.js';
 import { formatLong, formatShort, daysBetween } from '../../core/dates.js';
 
 const REFLECTION_PROMPTS = [
@@ -32,11 +32,12 @@ function computeStats(plan) {
   const doneTasks = due.reduce((sum, s) => sum + s.tasks.filter((t) => store.isTaskDone(s.id, t.id)).length, 0);
 
   // A streak of consecutive completed study days ending today.
+  // A study day counts only when every topic due that day is finished.
   let streak = 0;
   for (let i = todayIndex; i >= 0; i -= 1) {
-    const session = plan.sessions.find((s) => s.dayIndex === i);
-    if (!session) continue;
-    if (store.sessionProgress(session) === 100) streak += 1;
+    const onDay = plan.sessions.filter((s) => s.dayIndex === i);
+    if (!onDay.length) continue;
+    if (onDay.every((s) => store.sessionProgress(s) === 100)) streak += 1;
     else break;
   }
 
@@ -52,16 +53,20 @@ function computeStats(plan) {
 
 export function renderOverview(plan, { goToTab } = {}) {
   const today = new Date();
-  const todaySession = sessionOn(plan, today);
+  const todaySessions = sessionsOn(plan, today);
   const stats = computeStats(plan);
   const upcoming = upcomingSessions(plan, today, 8).filter((s) => s.dayIndex !== stats.todayIndex);
+  const todayMinutes = todaySessions.reduce(
+    (sum, s) => sum + s.tasks.reduce((n, t) => n + (t.minutes || 0), 0),
+    0,
+  );
 
   if (!plan.sessions.length) {
     return el('div', { class: 'view' }, [
       section('Today', formatLong(today), [
         empty(
           'Nothing planned yet. Add your subjects and topics and the spaced-repetition calendar builds itself — ' +
-            'one topic per day, each topic revisited two or three times.',
+            'each topic revisited on D1, D2, D4, D7, D14, D30, D60 and D120.',
           'Add subjects & topics',
           () => goToTab?.('subjects'),
         ),
@@ -89,10 +94,20 @@ export function renderOverview(plan, { goToTab } = {}) {
           stat('Sessions left', stats.remaining, 'Still ahead in this plan'),
         ]),
 
-        todaySession
-          ? el('div', { class: 'today-block' }, [sessionCard(todaySession, { showDate: false, open: true })])
+        todaySessions.length
+          ? el('div', { class: 'today-block' }, [
+              todaySessions.length > 1
+                ? el('p', {
+                    class: 'muted small',
+                    text:
+                      `${todaySessions.length} topics are due today (~${todayMinutes} min total) — ` +
+                      'their intervals happen to land together. Start with the hardest while you are freshest.',
+                  })
+                : null,
+              ...todaySessions.map((session) => sessionCard(session, { showDate: false, open: todaySessions.length === 1 })),
+            ])
           : el('div', { class: 'rest-day' }, [
-              el('h3', { text: 'No topic scheduled today' }),
+              el('h3', { text: 'Nothing due today' }),
               el('p', {
                 class: 'muted',
                 text:
@@ -131,8 +146,8 @@ export function renderOverview(plan, { goToTab } = {}) {
     section('Suggested extras', 'For when you have time left over.', [
       el('ul', { class: 'bullets' }, [
         el('li', {
-          text: todaySession
-            ? `Short review: five minutes of blank-page recall on ${todaySession.topic} before bed locks in far more than another hour now.`
+          text: todaySessions.length
+            ? `Short review: five minutes of blank-page recall on ${todaySessions[0].topic} before bed locks in far more than another hour now.`
             : 'Short review: pick the topic with the lowest completion and do five minutes of recall on it.',
         }),
         el('li', {}, [
