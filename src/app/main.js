@@ -14,6 +14,8 @@ import { renderExports } from './views/exports.js';
 import { renderPomodoro, startPomodoroEngine } from './views/pomodoro.js';
 import { renderFeynman } from './views/feynman.js';
 import { renderLearn } from './views/learn.js';
+import { startActivityEngine, activityStatus } from './activityEngine.js';
+import { formatSpan } from '../core/activity.js';
 
 const TABS = [
   { key: 'overview', label: 'Overview' },
@@ -44,6 +46,32 @@ function buildPlan() {
   });
 }
 
+/**
+ * A visible read-out of what the tracker is doing. Time measured silently is
+ * surveillance; time measured in plain sight is a tool.
+ */
+function trackerChip() {
+  const status = activityStatus();
+  const subject = status.subjectId ? store.subjectById(status.subjectId) : null;
+  const label = subject ? subject.name : 'general study';
+
+  if (status.state === 'active') {
+    return el('span', {
+      class: 'tracker-chip is-active',
+      title: `Counting time against ${label}. Pauses when you are idle or away.`,
+      text: `● ${label} · ${formatSpan(status.ms)}`,
+    });
+  }
+  if (status.state === 'paused') {
+    return el('span', {
+      class: 'tracker-chip is-paused',
+      title: 'Paused — no activity, or the tab is in the background. Idle time is not counted.',
+      text: '⏸ paused',
+    });
+  }
+  return el('span', { class: 'tracker-chip', title: 'Tracking starts when you interact with the app.', text: '○ not tracking' });
+}
+
 function header(activeTab) {
   return el('header', { class: 'app-header' }, [
     el('div', { class: 'brand' }, [
@@ -52,6 +80,7 @@ function header(activeTab) {
         el('h1', { text: 'Study Buddy' }),
         el('p', { class: 'tagline', text: 'Spaced repetition on D1 · D2 · D4 · D7 · D14 · D30 · D60 · D120.' }),
       ]),
+      trackerChip(),
     ]),
     el(
       'nav',
@@ -127,3 +156,5 @@ store.subscribe(render);
 render();
 // The clock runs for the life of the page, not the life of the Pomodoro view.
 startPomodoroEngine();
+// Presence tracking likewise: it must notice you leaving any tab, not just one.
+startActivityEngine();

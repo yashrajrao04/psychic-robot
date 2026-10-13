@@ -4,7 +4,8 @@ import { el, section, empty } from '../dom.js';
 import * as store from '../store.js';
 import { sessionCard, progressBar } from './plan.js';
 import { sessionsOn, upcomingSessions } from '../../core/scheduler.js';
-import { formatLong, formatShort, daysBetween } from '../../core/dates.js';
+import { formatLong, formatShort, daysBetween, toISODate, addDays } from '../../core/dates.js';
+import { totalsBySubject, totalsForDay, formatSpan } from '../../core/activity.js';
 
 const REFLECTION_PROMPTS = [
   'What did you find hardest today, and what made it hard?',
@@ -49,6 +50,63 @@ function computeStats(plan) {
     streak,
     remaining: plan.sessions.filter((s) => s.dayIndex > todayIndex).length,
   };
+}
+
+/** Where the time actually went, measured rather than estimated. */
+function timeBreakdown() {
+  const log = store.activityLog();
+  const today = totalsForDay(log, toISODate(new Date()));
+  const week = totalsBySubject(log, { since: addDays(new Date(), -6).getTime() });
+  const limit = store.idleLimitMinutes();
+
+  const nameOf = (subjectId) => (subjectId ? store.subjectById(subjectId)?.name || 'Deleted subject' : 'General / planning');
+
+  const bars = (totals) =>
+    totals.rows.length
+      ? el('ul', { class: 'time-bars' }, totals.rows.map((row) =>
+          el('li', { class: 'time-row' }, [
+            el('span', { class: 'time-label', text: nameOf(row.subjectId) }),
+            el('span', { class: 'time-bar' }, [
+              el('span', { class: `time-fill${row.subjectId ? '' : ' is-unassigned'}`, style: { width: `${row.share}%` } }),
+            ]),
+            el('span', { class: 'time-value', text: formatSpan(row.ms) }),
+          ]),
+        ))
+      : el('p', { class: 'muted small', text: 'Nothing measured yet — the clock starts when you start working.' });
+
+  return section(
+    'Where your time went',
+    `Measured automatically. The clock pauses the moment you go idle or leave the tab, and stops altogether after ${limit} minutes away — idle time is never counted.`,
+    [
+      el('div', { class: 'stat-row' }, [
+        el('div', { class: 'stat' }, [
+          el('p', { class: 'stat-value', text: formatSpan(today.total) }),
+          el('p', { class: 'stat-label', text: 'Focused today' }),
+          el('p', { class: 'muted small', text: `across ${today.rows.length} subject${today.rows.length === 1 ? '' : 's'}` }),
+        ]),
+        el('div', { class: 'stat' }, [
+          el('p', { class: 'stat-value', text: formatSpan(week.total) }),
+          el('p', { class: 'stat-label', text: 'Last 7 days' }),
+          el('p', { class: 'muted small', text: `${week.sessions} tracked session${week.sessions === 1 ? '' : 's'}` }),
+        ]),
+      ]),
+      el('h4', { text: 'Today' }),
+      bars(today),
+      el('h4', { text: 'Last 7 days' }),
+      bars(week),
+      el('label', { class: 'field' }, [
+        el('span', { text: 'Stop the clock after (minutes away)' }),
+        el('input', {
+          type: 'number',
+          class: 'input input-sm',
+          min: 1,
+          max: 60,
+          value: limit,
+          onChange: (e) => store.setIdleLimitMinutes(e.target.value),
+        }),
+      ]),
+    ],
+  );
 }
 
 export function renderOverview(plan, { goToTab } = {}) {
@@ -142,6 +200,8 @@ export function renderOverview(plan, { goToTab } = {}) {
           )
         : el('p', { class: 'muted', text: 'Nothing in the next week. Add topics or extend the plan length.' }),
     ]),
+
+    timeBreakdown(),
 
     section('Suggested extras', 'For when you have time left over.', [
       el('ul', { class: 'bullets' }, [
