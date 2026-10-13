@@ -14,6 +14,7 @@ import { renderExports } from './views/exports.js';
 import { renderPomodoro, startPomodoroEngine } from './views/pomodoro.js';
 import { renderFeynman } from './views/feynman.js';
 import { renderLearn } from './views/learn.js';
+import { renderPractice } from './views/practice.js';
 import { startActivityEngine, activityStatus } from './activityEngine.js';
 import { formatSpan } from '../core/activity.js';
 
@@ -26,6 +27,7 @@ const TABS = [
   { key: 'cram', label: 'Cram' },
   { key: 'buddy', label: 'Study Buddy' },
   { key: 'feynman', label: 'Feynman' },
+  { key: 'practice', label: 'Tailored Practice' },
   { key: 'testing', label: 'Testing' },
   { key: 'export', label: 'Export' },
 ];
@@ -130,6 +132,9 @@ function render() {
       break;
     case 'learn':
       body = renderLearn(plan, { goToTab });
+      break;
+    case 'practice':
+      body = renderPractice(plan, { goToTab });
       break;
     case 'export':
       body = renderExports(plan);

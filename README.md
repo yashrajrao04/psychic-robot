@@ -10,7 +10,7 @@ your data stays in `localStorage`.
 
 ```bash
 npm run serve   # http://localhost:5173
-npm test        # 122 unit tests, no dependencies
+npm test        # 153 unit tests, no dependencies
 ```
 
 ## What it does
@@ -60,7 +60,18 @@ the app quietly dropped them. A topic still never repeats twice in one day, beca
 re-reading something an hour later is not spacing. Under a day to go, it switches to a
 timeline of 40-minute blocks ending 30 minutes before the test.
 
-**Study Buddy.** Paste your notes and get a side-by-side comparison: column A is what you
+**Study Buddy.** A conversation you can actually have, which still cannot do your homework.
+
+It is a rule-based Socratic partner, not a language model — and that constraint is the
+feature. It has no facts about your subject, only your notes and your words, so it is
+*structurally* incapable of handing over an answer. What it can do is read what you just said
+against what you wrote down: it spots a technical term you used without unpacking, notices
+when a passage came back word-for-word from your notes, pushes for a *why* when you have only
+described, and asks about concepts your notes cover but your explanation skipped. Ask it to
+define something and it turns the question around and tells you which line of your notes to
+reread.
+
+Paste your notes and get a side-by-side comparison: column A is what you
 wrote, column B is the same material refiled into the eight sections complete notes have
 (definition, mechanism, worked examples, pitfalls, exam angles…). Empty sections are shown
 as prompts, and thin coverage offers to re-mark the topic *hard* so it gets more passes.
@@ -68,6 +79,13 @@ Learn Mode then walks the concept step by step, each step ending in something fo
 
 **Testing mode.** Questions are generated from the terms and claims in your own notes, so
 they stay on-topic. Two strong answers in a row raises the difficulty; two misses lowers it.
+
+**Tailored practice.** Testing waits to be told what to do; this decides for you. It picks the
+topic — what is scheduled today, what has gone stale, where you are weakest — opens one rung
+below your current level as a warm-up, and climbs with every question. Levels persist across
+sessions, so tomorrow starts above where today finished. A clean answer raises your level for
+good; a miss costs exactly one rung and never drops below your best minus one, because a bad
+day should not undo weeks.
 
 **Learn.** A Khan Academy course catalog for grades 6–12 across maths, English, social studies
 and science, plus all 17 AP courses Khan Academy publishes. Filter by grade, subject or AP;
@@ -83,8 +101,9 @@ Course links resolve through Khan Academy's search rather than hard-coded unit p
 Khan Academy reorganises its slugs regularly and a deep path that works today is a 404 next
 term.
 
-**Videos are added by pasting a link, not shipped as a fixed list.** Khan Academy's video ids
-are not derivable from its lesson URLs, and a wrong YouTube id does not fail loudly — it
+**Videos are added by pasting a YouTube link, not shipped as a fixed list.** YouTube URLs are
+the only accepted input — every link shape works (watch, youtu.be, shorts, embed, live), and
+nothing else does. Khan Academy's video ids are not derivable from its lesson URLs, and a wrong YouTube id does not fail loudly — it
 silently plays something else, which is the worst possible outcome in a study tool aimed at
 school students. So the app resolves each pasted link against YouTube's public oEmbed endpoint
 at the moment you add it, stores the real title, and labels the channel: **✓ Khan Academy**
@@ -189,7 +208,9 @@ src/core/       pure logic — no DOM, directly unit-tested
   notes.js      note parsing, structural coverage, Learn Mode
   testing.js    question generation, hints, adaptive difficulty
   policy.js     the no-direct-answers guard
-  khan.js       Khan Academy catalog + video id parsing and embedding
+  khan.js       Khan Academy catalog + YouTube video id parsing and embedding
+  practice.js   the per-topic difficulty ratchet and topic selection
+  coach.js      the Socratic conversation engine
   activity.js   presence tracking, idle rules and per-subject totals
   pomodoro.js   focus/break state machine, driven by timestamps
   feynman.js    explanation analysis — recital, jargon, reasoning, readability

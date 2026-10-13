@@ -92,7 +92,7 @@ function addVideoForm(course) {
   const input = el('input', {
     type: 'url',
     class: 'input',
-    placeholder: 'Paste a YouTube or Khan Academy share link',
+    placeholder: 'Paste a YouTube video URL',
     'aria-label': `Add a video to ${course.name}`,
   });
   // Kept in module state for the same reason as Study Buddy's notice: adding a

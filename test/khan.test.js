@@ -134,10 +134,8 @@ test('ids are extracted from every link shape a learner might paste', () => {
     `https://www.youtube-nocookie.com/embed/${id}`,
     `https://www.youtube.com/shorts/${id}`,
     `https://www.youtube.com/live/${id}`,
-    `https://www.khanacademy.org/embed_video?v=${id}`,
     `youtube.com/watch?v=${id}`,
-    id,
-    `  ${id}  `,
+    `  https://www.youtube.com/watch?v=${id}  `,
   ];
   for (const input of accepted) {
     assert.equal(parseVideoId(input), id, `failed to parse: ${input}`);
@@ -146,8 +144,11 @@ test('ids are extracted from every link shape a learner might paste', () => {
 
 test('anything that is not a real video id is refused rather than guessed', () => {
   const refused = [
+    // YouTube links only — a Khan Academy share link is no longer accepted.
+    'https://www.khanacademy.org/embed_video?v=NybHckSEQBI',
     'https://www.khanacademy.org/math/algebra/x2f8bb/v/intro-to-slope',
     'https://www.khanacademy.org/math/algebra',
+    'NybHckSEQBI',
     'https://vimeo.com/123456789',
     'https://example.com/watch?v=NybHckSEQBI',
     'https://www.youtube.com/watch?v=tooshort',
@@ -163,11 +164,9 @@ test('anything that is not a real video id is refused rather than guessed', () =
 });
 
 test('a lookalike domain cannot smuggle a video through', () => {
-  // The host check must be exact — "khanacademy.org.evil.com" is not Khan.
-  assert.equal(parseVideoId('https://khanacademy.org.evil.com/embed_video?v=NybHckSEQBI'), null);
   assert.equal(parseVideoId('https://notyoutube.com/watch?v=NybHckSEQBI'), null);
-  // But real subdomains are fine.
-  assert.equal(parseVideoId('https://es.khanacademy.org/embed_video?v=NybHckSEQBI'), 'NybHckSEQBI');
+  assert.equal(parseVideoId('https://youtube.com.evil.com/watch?v=NybHckSEQBI'), null);
+  assert.equal(parseVideoId('https://khanacademy.org.evil.com/embed_video?v=NybHckSEQBI'), null);
 });
 
 test('embed urls are privacy-preserving and well formed', () => {
@@ -190,8 +189,10 @@ test('watch and thumbnail urls refuse invalid ids too', () => {
 
 test('rejections explain what to do instead', () => {
   assert.match(explainRejection('https://www.khanacademy.org/math/algebra/v/intro-to-slope'), /Share/);
+  assert.match(explainRejection('https://vimeo.com/1'), /YouTube links only/i);
   assert.match(explainRejection('https://www.youtube.com/'), /youtube/i);
   assert.match(explainRejection('https://vimeo.com/1'), /vimeo\.com/);
   assert.match(explainRejection(''), /paste a link/i);
-  assert.match(explainRejection('gibberish'), /does not look like a link|Only YouTube/i);
+  assert.match(explainRejection('gibberish'), /does not look like a link/i);
+  assert.match(explainRejection('just some words'), /does not look like a link/i);
 });

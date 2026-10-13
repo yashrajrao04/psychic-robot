@@ -6,12 +6,123 @@
 import { el, section, empty, inlineMarkdown } from '../dom.js';
 import * as store from '../store.js';
 import { compareNotes, buildLearnMode } from '../../core/notes.js';
+import { COACH, USER, createConversation, opener, respond, say } from '../../core/coach.js';
 import { isDirectAnswerRequest, buildGuidedRedirect } from '../../core/policy.js';
 import { sessionsForTopic } from '../../core/scheduler.js';
 import { formatShort } from '../../core/dates.js';
 
 /** Kept outside the store: transient UI state, not worth persisting. */
-const ui = { topicId: null, showLearn: false, notice: null };
+const ui = { topicId: null, showLearn: false, notice: null, mode: 'chat', conversation: null, draft: '' };
+
+/** The chat transcript, kept per topic so switching away does not lose it. */
+const conversations = new Map();
+
+function conversationFor(topic, notes) {
+  const hasNotes = Boolean(notes.trim());
+  const existing = conversations.get(topic.id);
+
+  // The opener says whether it has notes to check against. If notes arrive
+  // before the first reply, that line is already wrong — so regenerate it
+  // while the conversation is still just the greeting.
+  const staleOpener = existing && existing.turns.length === 1 && existing.hadNotes !== hasNotes;
+
+  if (!existing || staleOpener) {
+    const fresh = say(createConversation(topic.topic), COACH, opener(topic.topic, notes));
+    fresh.hadNotes = hasNotes;
+    conversations.set(topic.id, fresh);
+  }
+  return conversations.get(topic.id);
+}
+
+function chatPanel(topic, notes) {
+  const conversation = conversationFor(topic, notes);
+
+  const input = el('textarea', {
+    class: 'input textarea chat-input',
+    rows: 3,
+    placeholder: `Talk to me about ${topic.topic}. Explain it, argue with me, or say you are stuck.`,
+    'aria-label': 'Message',
+    onInput: (e) => {
+      ui.draft = e.target.value;
+    },
+    onKeyDown: (e) => {
+      // Enter sends, shift+enter makes a new line — chat convention.
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        send();
+      }
+    },
+  });
+  input.value = ui.draft;
+
+  function send() {
+    const message = ui.draft.trim();
+    if (!message) return;
+    const current = conversationFor(topic, notes);
+    const reply = respond({ message, conversation: current, notes, topic: topic.topic });
+
+    let next = say(current, USER, message);
+    next = say(next, COACH, reply.text, { kind: reply.kind, score: reply.analysis?.score });
+    if (reply.state) Object.assign(next, reply.state);
+
+    conversations.set(topic.id, next);
+    ui.draft = '';
+    store.refresh();
+  }
+
+  const transcript = el(
+    'div',
+    {
+      class: 'chat-log',
+      // The newest turn is the one worth reading; without this the view stays
+      // pinned to the greeting and the reply you just earned is below the fold.
+    },
+    conversation.turns.map((turn) =>
+      el('div', { class: `chat-turn is-${turn.role}` }, [
+        el('span', { class: 'chat-who', text: turn.role === USER ? 'You' : 'Buddy' }),
+        el('div', { class: 'chat-bubble' }, [
+          el('p', { text: turn.text }),
+          turn.score !== undefined && turn.score !== null
+            ? el('span', { class: 'chat-score', title: 'How well that attempt held up', text: `${turn.score}/100` })
+            : null,
+        ]),
+      ]),
+    ),
+  );
+
+  // Pin to the newest message once the node is in the document.
+  requestAnimationFrame(() => {
+    if (transcript.isConnected) transcript.scrollTop = transcript.scrollHeight;
+  });
+
+  return section(
+    'Talk it through',
+    'It asks; you answer. It will not define a term, finish a sentence, or hand you a result — it only has your notes and your words to work with.',
+    [
+      transcript,
+      input,
+      el('div', { class: 'button-row' }, [
+        el('button', { class: 'btn primary', text: 'Send', onClick: () => send() }),
+        el('button', {
+          class: 'btn',
+          text: 'Start over',
+          onClick: () => {
+            conversations.delete(topic.id);
+            ui.draft = '';
+            store.refresh();
+          },
+        }),
+      ]),
+      !notes.trim()
+        ? el('p', {
+            class: 'notice small',
+            text:
+              'No notes saved for this topic yet, so it cannot tell whether you are thinking or reciting. Add some below and the questions get much sharper.',
+          })
+        : null,
+    ],
+  );
+}
 
 function readTextFile(file) {
   return new Promise((resolve, reject) => {
@@ -188,10 +299,24 @@ export function renderBuddy(plan, { goToTab } = {}) {
     },
   });
 
+  const modeSwitch = el('div', { class: 'view-switch', role: 'tablist' }, [
+    ['chat', 'Talk'],
+    ['notes', 'Compare notes'],
+  ].map(([key, label]) =>
+    el('button', {
+      class: `switch-btn${ui.mode === key ? ' is-active' : ''}`,
+      type: 'button',
+      text: label,
+      onClick: () => {
+        ui.mode = key;
+        store.refresh();
+      },
+    }),
+  ));
+
   const inputPanel = section('Study Buddy', 'Give me your notes on a topic and I will show you what a complete set looks like beside them.', [
     el('div', { class: 'settings-grid' }, [
-      el('label', { class: 'field' }, [el('span', { text: 'Topic' }), topicSelect]),
-      el('label', { class: 'field' }, [el('span', { text: 'Or upload a text file' }), fileInput]),
+      el('label', { class: 'field' }, [el('span', { text: 'Upload a text file' }), fileInput]),
     ]),
     textarea,
     noticeSlot,
@@ -225,8 +350,26 @@ export function renderBuddy(plan, { goToTab } = {}) {
     ]),
   ]);
 
+  const topicBar = el('div', { class: 'panel' }, [
+    el('header', { class: 'panel-head row' }, [
+      el('div', {}, [
+        el('h2', { text: 'Study Buddy' }),
+        el('p', { class: 'muted', text: `${topic.subject} — ${topic.topic}` }),
+      ]),
+      modeSwitch,
+    ]),
+    el('div', { class: 'panel-body' }, [
+      el('label', { class: 'field' }, [el('span', { text: 'Topic' }), topicSelect]),
+    ]),
+  ]);
+
+  if (ui.mode === 'chat') {
+    return el('div', { class: 'view' }, [topicBar, chatPanel(topic, notesText)]);
+  }
+
   if (!notesText.trim()) {
     return el('div', { class: 'view' }, [
+      topicBar,
       inputPanel,
       section('Comparison', null, [
         empty('Paste your notes and hit Compare. Even rough notes are enough to find the gaps.'),
@@ -289,6 +432,7 @@ export function renderBuddy(plan, { goToTab } = {}) {
   ]);
 
   return el('div', { class: 'view' }, [
+    topicBar,
     inputPanel,
     section('Side by side', 'Column A is what you wrote. Column B is the same material, structured.', [
       comparisonColumns(comparison, notesText),

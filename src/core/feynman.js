@@ -35,7 +35,9 @@ const DEFINITION_CUES = [
   /\bmeans\b/i,
   /\brefers?\s+to\b/i,
   /\bin other words\b/i,
-  /\bthat is\b/i,
+  // "that is, the splitting of water" defines; "that is how it works" does not.
+  /\bthat is,/i,
+  /\bthat is to say\b/i,
   /\bwhich is\b/i,
   /\bstands for\b/i,
   /\bthink of (it|this) as\b/i,
@@ -199,12 +201,15 @@ export function findCircular(explanation) {
  * @param {object} options `{ notes, topic }` — notes are optional but make the
  *   coverage and recital checks possible.
  */
-export function analyseExplanation(explanation, { notes = '', topic = 'this topic' } = {}) {
+export function analyseExplanation(explanation, { notes = '', topic = 'this topic', minWords = 25 } = {}) {
   const text = String(explanation || '').trim();
   const ws = words(text);
   const ss = sentences(text);
 
-  if (ws.length < 25) {
+  // The Feynman tab wants a full attempt before it will score one. A
+  // conversation turn is shorter by nature, so the coach lowers this bar
+  // rather than telling someone to "write more" after every sentence.
+  if (ws.length < minWords) {
     return {
       ok: false,
       tooShort: true,
