@@ -16,6 +16,9 @@ const DIRECT_ANSWER_PATTERNS = [
   /\b(solve|answer|do|complete|finish)\s+(this|these|it|that|my|the)\s+(for\s+me\b|.*\b(homework|assignment|worksheet|problem\s*set|question\s*\d+|q\s*\d+))/i,
   /\bdo\s+my\s+(homework|assignment|coursework|essay)\b/i,
   /\bwrite\s+(my|the)\s+(essay|assignment|answer|report)\s+for\s+me\b/i,
+  // The bare form, with no noun to anchor on: "can you just write it for me".
+  /\b(write|do|solve|finish|complete|answer)\s+(it|this|that|these|them)\s+for\s+me\b/i,
+  /\bcan you (just )?(write|do|solve|finish)\b.*\bfor me\b/i,
   /\banswer\s+key\b/i,
   /\bshow\s+me\s+the\s+worked\s+solution\s+to\s+(my|this|question)\b/i,
   /\bwhat\s+should\s+i\s+(put|write)\s+(down\s+)?(for|as)\s+(the\s+)?answer\b/i,

@@ -854,3 +854,63 @@ details > summary:hover { color: var(--accent); }
   .tracker-chip { margin-left: 0; }
   .brand { flex-wrap: wrap; }
 }
+
+/* ------------------------------------------------------- study buddy chat */
+
+.chat-log {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+  max-height: 420px;
+  overflow-y: auto;
+  padding: 0.6rem;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+.chat-turn { display: flex; flex-direction: column; gap: 0.15rem; max-width: 86%; }
+.chat-turn.is-user { align-self: flex-end; align-items: flex-end; }
+.chat-who { font-size: 0.68rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); }
+.chat-bubble {
+  padding: 0.55rem 0.75rem;
+  border-radius: 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  font-size: 0.9rem;
+  line-height: 1.5;
+  position: relative;
+}
+.chat-bubble p { margin: 0; white-space: pre-wrap; }
+.chat-turn.is-user .chat-bubble { background: var(--accent); border-color: var(--accent); color: #fff; }
+.chat-turn.is-coach .chat-bubble { border-left: 3px solid var(--accent); }
+.chat-score {
+  display: inline-block;
+  margin-top: 0.3rem;
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: var(--muted);
+  background: var(--surface-2);
+  padding: 0.05rem 0.35rem;
+  border-radius: 4px;
+}
+.chat-input { font-family: inherit; font-size: 0.92rem; }
+
+/* ---------------------------------------------------- tailored practice */
+
+.ladder-strip { display: flex; gap: 0.3rem; align-items: center; }
+.ladder-step {
+  flex: 1;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+}
+.ladder-step.is-done { background: var(--easy); border-color: var(--easy); }
+.ladder-step.is-current { background: var(--accent); border-color: var(--accent); }
+
+.level-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.4rem; }
+.level-row { display: grid; grid-template-columns: minmax(100px, 1fr) 2fr auto; align-items: center; gap: 0.6rem; font-size: 0.86rem; }
+.level-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.level-track { background: var(--surface-2); border-radius: 4px; height: 10px; overflow: hidden; }
+.level-fill { display: block; height: 100%; background: linear-gradient(90deg, var(--easy), var(--accent)); border-radius: 4px; }
+.level-badge { font-size: 0.7rem; font-weight: 700; color: var(--accent); white-space: nowrap; }

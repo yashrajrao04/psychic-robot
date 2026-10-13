@@ -143,19 +143,19 @@ export function isValidVideoId(id) {
 }
 
 /**
- * Pull a YouTube video id out of whatever the learner pasted.
+ * Pull a YouTube video id out of a pasted YouTube URL.
  *
- * Handles the YouTube forms (watch, youtu.be, shorts, embed, live) and Khan
- * Academy's own `embed_video?v=` share link, which carries the YouTube id. A
- * bare id is accepted too.
+ * YouTube URLs only, by design. Khan Academy's lesson pages carry a slug and
+ * not a video id, so there is nothing in them to extract; accepting other
+ * sources would mean embedding video nobody had checked. Every YouTube link
+ * shape is handled: watch, youtu.be, shorts, embed, live and /v/.
  *
- * Returns `null` rather than guessing: a wrong id does not fail loudly, it
- * silently plays something else, which is the worst outcome for a study tool.
+ * Returns `null` rather than guessing. A wrong id does not fail loudly — it
+ * silently plays something else, the worst outcome for a study tool.
  */
 export function parseVideoId(input) {
   const raw = String(input || '').trim();
   if (!raw) return null;
-  if (VIDEO_ID.test(raw)) return raw;
 
   let url;
   try {
@@ -174,22 +174,13 @@ export function parseVideoId(input) {
   }
 
   const isYouTube = host === 'youtube.com' || host === 'm.youtube.com' || host === 'youtube-nocookie.com';
-  const isKhan = host === 'khanacademy.org' || host.endsWith('.khanacademy.org');
+  if (!isYouTube) return null;
 
-  if (isYouTube || isKhan) {
-    // ?v=<id> covers youtube/watch and khanacademy/embed_video alike.
-    const v = url.searchParams.get('v');
-    if (v && VIDEO_ID.test(v)) return v;
-  }
+  const v = url.searchParams.get('v');
+  if (v && VIDEO_ID.test(v)) return v;
 
-  if (isYouTube) {
-    const match = path.match(/^\/(?:embed|shorts|live|v)\/([A-Za-z0-9_-]{11})/);
-    if (match) return match[1];
-  }
-
-  // A Khan Academy lesson page carries a slug, not a YouTube id — there is
-  // nothing to extract, and inventing one would be worse than saying so.
-  return null;
+  const match = path.match(/^\/(?:embed|shorts|live|v)\/([A-Za-z0-9_-]{11})/);
+  return match ? match[1] : null;
 }
 
 /** Privacy-preserving embed URL. */
@@ -219,15 +210,20 @@ export function explainRejection(input) {
   } catch {
     return 'That does not look like a link. Paste the full URL from the address bar.';
   }
+  // `new URL` happily accepts a bare word as a hostname, so a dotless host is
+  // really just text, not a link anyone pasted from a browser.
+  if (!host.includes('.')) {
+    return 'That does not look like a link. Paste the full URL from the address bar.';
+  }
 
   if (host.endsWith('khanacademy.org')) {
     return (
-      'That is a Khan Academy lesson page, which does not carry the video id in the URL. On the video, use ' +
-      'Share, then copy the YouTube link — or open the video on YouTube and copy that address.'
+      'Khan Academy lesson pages do not carry the video id in their URL. On the video, use Share and copy the ' +
+      'YouTube link, or open it on YouTube and copy the address bar.'
     );
   }
   if (host.includes('youtube') || host === 'youtu.be') {
     return 'That looks like a YouTube link, but no 11-character video id could be found in it.';
   }
-  return `Only YouTube and Khan Academy links work here — that one points at ${host}.`;
+  return `YouTube links only — that one points at ${host}.`;
 }

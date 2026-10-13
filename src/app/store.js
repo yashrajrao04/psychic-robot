@@ -36,6 +36,7 @@ function defaultState() {
     feynman: { topicId: null, drafts: {} },
     library: { videos: {}, grade: null, subject: 'math', apOnly: false },
     activity: { log: [], idleLimitMinutes: DEFAULT_IDLE_LIMIT_MINUTES, lastTransition: null },
+    practice: { records: {} },
     planView: 'calendar',
     tab: 'overview',
   };
@@ -79,6 +80,7 @@ function migrate(s) {
   if (!s.feynman) s.feynman = base.feynman;
   if (!s.library) s.library = base.library;
   if (!s.activity) s.activity = base.activity;
+  if (!s.practice) s.practice = base.practice;
 }
 
 function persist() {
@@ -451,6 +453,18 @@ export function logActivity(entry) {
 export function setActivityStatus(status) {
   update((s) => {
     s.activity.lastTransition = status;
+  });
+}
+
+/* ------------------------------------------------------------- practice -- */
+
+export function practiceRecords() {
+  return state.practice.records;
+}
+
+export function setPracticeRecord(topicId, record) {
+  update((s) => {
+    s.practice.records[topicId] = record;
   });
 }
 
