@@ -6,6 +6,7 @@
 import { fromISODate, toISODate } from '../core/dates.js';
 import { DEFAULT_DIFFICULTY } from '../core/scheduler.js';
 import { DEFAULT_SETTINGS as POMODORO_DEFAULTS, createTimer } from '../core/pomodoro.js';
+import { DEFAULT_IDLE_LIMIT_MINUTES, appendToLog } from '../core/activity.js';
 
 const STORAGE_KEY = 'study-buddy:v1';
 
@@ -34,6 +35,7 @@ function defaultState() {
     pomodoro: { settings: { ...POMODORO_DEFAULTS }, timer: createTimer(), topicId: null, log: [] },
     feynman: { topicId: null, drafts: {} },
     library: { videos: {}, grade: null, subject: 'math', apOnly: false },
+    activity: { log: [], idleLimitMinutes: DEFAULT_IDLE_LIMIT_MINUTES, lastTransition: null },
     planView: 'calendar',
     tab: 'overview',
   };
@@ -76,6 +78,7 @@ function migrate(s) {
   else s.pomodoro.settings = { ...POMODORO_DEFAULTS, ...(s.pomodoro.settings || {}) };
   if (!s.feynman) s.feynman = base.feynman;
   if (!s.library) s.library = base.library;
+  if (!s.activity) s.activity = base.activity;
 }
 
 function persist() {
@@ -414,6 +417,41 @@ export function setTopicCourse(topicId, courseId) {
 export function ensureSubject(name) {
   const existing = state.subjects.find((s) => s.name.toLowerCase() === String(name).toLowerCase());
   return existing || addSubject(name);
+}
+
+/* ------------------------------------------------------------- activity -- */
+
+export function activityLog() {
+  return state.activity.log;
+}
+
+export function idleLimitMinutes() {
+  return state.activity.idleLimitMinutes;
+}
+
+export function setIdleLimitMinutes(minutes) {
+  update((s) => {
+    s.activity.idleLimitMinutes = Math.max(1, Math.min(60, Number(minutes) || DEFAULT_IDLE_LIMIT_MINUTES));
+  });
+}
+
+/** Write a finished tracking session into the log. */
+export function logActivity(entry) {
+  if (!entry || !entry.ms || entry.ms < 1000) return; // sub-second noise
+  update((s) => {
+    s.activity.log = appendToLog(s.activity.log, entry);
+    if (s.activity.log.length > 5000) s.activity.log = s.activity.log.slice(-5000);
+  });
+}
+
+/**
+ * The live tracker state shown in the header. Kept out of the persisted log so
+ * a ticking indicator never writes to storage.
+ */
+export function setActivityStatus(status) {
+  update((s) => {
+    s.activity.lastTransition = status;
+  });
 }
 
 /* ------------------------------------------------------------ seed/reset -- */

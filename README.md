@@ -10,7 +10,7 @@ your data stays in `localStorage`.
 
 ```bash
 npm run serve   # http://localhost:5173
-npm test        # 107 unit tests, no dependencies
+npm test        # 122 unit tests, no dependencies
 ```
 
 ## What it does
@@ -93,7 +93,33 @@ unconfirmed" when YouTube could not be reached. Link parsing accepts every YouTu
 Khan Academy's own share link, refuses lookalike domains, and explains how to fix a link it
 cannot use rather than failing silently.
 
-**Pomodoro.** Focus blocks with breaks, wired to the plan: pick a topic that is due today and
+**Automatic time tracking.** The app measures how long you spend on each subject without you
+starting anything. Time is attributed to the subject of whatever you are working on, and the
+Overview breaks it down for today and the last seven days.
+
+Two rules make the numbers worth having:
+
+- **Idle time is never counted.** When a session pauses it banks time up to your *last
+  activity*, not up to the moment the pause was noticed — otherwise every trip to the kitchen
+  would earn five free minutes and the log would flatter you.
+- **A glance away does not end the session.** Switch tabs briefly and it resumes where it was,
+  with the away time excluded. Stay away past the limit (five minutes by default, configurable)
+  and the clock stops and the session is written to the log.
+
+Leaving is detected two ways: the tab going to the background, which the browser announces
+instantly, and input drying up, which can only be noticed after the fact. They are credited
+differently for that reason — reading a page for three minutes without touching the mouse
+still counts, because the tab was visible the whole time. A header chip always shows what is
+being tracked and whether it is paused; time measured silently would be surveillance, time
+measured in plain sight is a tool. Time that cannot be attributed to one subject — planning,
+exporting — is reported as "General / planning" rather than quietly dropped or misfiled.
+
+**Pomodoro.** The same presence rule applies: go idle or leave, and the block stops rather
+than running down while you are elsewhere. It *freezes* rather than resetting, though — the
+tracker answers "how long were you demonstrably studying", but the Pomodoro answers "how far
+through this block are you", and rewinding a countdown someone deliberately started would
+throw away real work. Stopping is enough to keep an unattended block from ever completing.
+ Focus blocks with breaks, wired to the plan: pick a topic that is due today and
 completed blocks are logged against it, so the focus log records time actually spent rather
 than time intended. The timer is stored as timestamps, not a counter, so it stays accurate
 through a backgrounded tab or a page reload. Leave the tab for longer than the phase and the
@@ -164,6 +190,7 @@ src/core/       pure logic — no DOM, directly unit-tested
   testing.js    question generation, hints, adaptive difficulty
   policy.js     the no-direct-answers guard
   khan.js       Khan Academy catalog + video id parsing and embedding
+  activity.js   presence tracking, idle rules and per-subject totals
   pomodoro.js   focus/break state machine, driven by timestamps
   feynman.js    explanation analysis — recital, jargon, reasoning, readability
   exporters.js  ICS / CSV / Notion output

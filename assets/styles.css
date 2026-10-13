@@ -823,3 +823,34 @@ details > summary:hover { color: var(--accent); }
 @media (min-width: 900px) {
   .video-grid { grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); }
 }
+
+/* -------------------------------------------------------- time tracking */
+
+.tracker-chip {
+  margin-left: auto;
+  flex: 0 0 auto;
+  font-size: 0.74rem;
+  font-weight: 600;
+  padding: 0.2rem 0.5rem;
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--muted);
+  border: 1px solid var(--border);
+  white-space: nowrap;
+  cursor: default;
+}
+.tracker-chip.is-active { color: var(--easy); border-color: color-mix(in srgb, var(--easy) 40%, var(--border)); }
+.tracker-chip.is-paused { color: var(--medium); border-color: color-mix(in srgb, var(--medium) 40%, var(--border)); }
+
+.time-bars { list-style: none; margin: 0 0 0.5rem; padding: 0; display: flex; flex-direction: column; gap: 0.35rem; }
+.time-row { display: grid; grid-template-columns: minmax(90px, 150px) 1fr 48px; align-items: center; gap: 0.6rem; font-size: 0.85rem; }
+.time-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.time-bar { background: var(--surface-2); border-radius: 4px; height: 14px; overflow: hidden; }
+.time-fill { display: block; height: 100%; background: var(--accent); border-radius: 4px; }
+.time-fill.is-unassigned { background: var(--muted); opacity: 0.55; }
+.time-value { text-align: right; font-variant-numeric: tabular-nums; color: var(--muted); font-size: 0.8rem; }
+
+@media (max-width: 520px) {
+  .tracker-chip { margin-left: 0; }
+  .brand { flex-wrap: wrap; }
+}

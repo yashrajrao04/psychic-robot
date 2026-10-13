@@ -130,10 +130,15 @@ export function renderBuddy(plan, { goToTab } = {}) {
   });
   textarea.value = notesText;
 
-  const noticeSlot = el('div', {});
-  const showNotice = (node) => {
-    noticeSlot.replaceChildren(node);
+  // Held as a factory in module state, not as a live DOM node. Background work
+  // — the activity tracker banking a session, the Pomodoro changing phase —
+  // re-renders the whole app at arbitrary moments, and anything kept only in
+  // the DOM is wiped when that happens.
+  const showNotice = (factory) => {
+    ui.notice = factory;
+    store.refresh();
   };
+  const noticeSlot = el('div', {}, ui.notice ? ui.notice() : null);
 
   const topicSelect = el(
     'select',
@@ -143,6 +148,7 @@ export function renderBuddy(plan, { goToTab } = {}) {
       onChange: (e) => {
         ui.topicId = e.target.value;
         ui.showLearn = false;
+        ui.notice = null;
         store.refresh();
       },
     },
@@ -162,7 +168,7 @@ export function renderBuddy(plan, { goToTab } = {}) {
       // Binary formats cannot be read here without shipping a parser, and a
       // half-decoded PDF would produce nonsense analysis. Say so plainly.
       if (/\.(pdf|docx?|pptx?|pages)$/i.test(file.name)) {
-        showNotice(
+        showNotice(() =>
           el('p', {
             class: 'notice',
             text:
@@ -175,9 +181,9 @@ export function renderBuddy(plan, { goToTab } = {}) {
       try {
         const text = await readTextFile(file);
         textarea.value = textarea.value ? `${textarea.value}\n\n${text}` : text;
-        showNotice(el('p', { class: 'notice ok', text: `Loaded ${file.name} (${text.split(/\s+/).length} words).` }));
+        showNotice(() => el('p', { class: 'notice ok', text: `Loaded ${file.name} (${text.split(/\s+/).length} words).` }));
       } catch {
-        showNotice(el('p', { class: 'notice error', text: 'Could not read that file.' }));
+        showNotice(() => el('p', { class: 'notice error', text: 'Could not read that file.' }));
       }
     },
   });
@@ -198,10 +204,12 @@ export function renderBuddy(plan, { goToTab } = {}) {
           // The policy guard applies here too: notes are a legitimate use, but
           // "just write the answer for me" pasted into the box is not.
           if (isDirectAnswerRequest(text)) {
-            showNotice(guidedRedirectCard(buildGuidedRedirect(text)));
+            const redirect = buildGuidedRedirect(text);
+            showNotice(() => guidedRedirectCard(redirect));
             return;
           }
           ui.showLearn = false;
+          ui.notice = null;
           store.saveNotes(topic.id, text);
         },
       }),

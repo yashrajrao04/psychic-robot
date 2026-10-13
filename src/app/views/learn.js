@@ -26,7 +26,7 @@ import {
   watchUrl,
 } from '../../core/khan.js';
 
-const ui = { open: null, notice: null };
+const ui = { open: null, feedback: {} };
 
 /**
  * Ask YouTube what a video actually is.
@@ -95,34 +95,43 @@ function addVideoForm(course) {
     placeholder: 'Paste a YouTube or Khan Academy share link',
     'aria-label': `Add a video to ${course.name}`,
   });
-  const feedback = el('p', { class: 'muted small' });
+  // Kept in module state for the same reason as Study Buddy's notice: adding a
+  // video writes to the store, which re-renders and would discard a message
+  // held only in the DOM.
+  const saved = ui.feedback[course.id];
+  const feedback = el('p', { class: saved ? saved.className : 'muted small', text: saved ? saved.text : '' });
+  const say = (className, text) => {
+    ui.feedback[course.id] = { className, text };
+    feedback.className = className;
+    feedback.textContent = text;
+  };
 
   const submit = async () => {
     const raw = input.value;
     const videoId = parseVideoId(raw);
 
     if (!videoId) {
-      feedback.className = 'notice error small';
-      feedback.textContent = explainRejection(raw);
+      say('notice error small', explainRejection(raw));
       return;
     }
 
-    feedback.className = 'muted small';
-    feedback.textContent = 'Checking the video with YouTube…';
+    say('muted small', 'Checking the video with YouTube…');
 
     store.addVideo(course.id, { videoId, title: '', author: '' });
     input.value = '';
 
     const resolved = await resolveVideo(videoId);
     if (resolved) {
+      const khan = isKhanChannel(resolved.author);
+      say(
+        khan ? 'notice ok small' : 'notice small',
+        khan
+          ? `Added "${resolved.title}" — confirmed Khan Academy.`
+          : `Added, but this was published by ${resolved.author}, not Khan Academy.`,
+      );
       store.updateVideo(course.id, videoId, resolved);
-      feedback.className = isKhanChannel(resolved.author) ? 'notice ok small' : 'notice small';
-      feedback.textContent = isKhanChannel(resolved.author)
-        ? `Added "${resolved.title}" — confirmed Khan Academy.`
-        : `Added, but this was published by ${resolved.author}, not Khan Academy.`;
     } else {
-      feedback.className = 'muted small';
-      feedback.textContent = 'Added. YouTube could not be reached, so the channel is unconfirmed.';
+      say('muted small', 'Added. YouTube could not be reached, so the channel is unconfirmed.');
     }
   };
 
